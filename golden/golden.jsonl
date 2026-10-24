@@ -1,0 +1,5 @@
+{"id": "typo-001", "input": "i will send u the report tommorow", "expected": "I will send you the report tomorrow.", "tags": ["typo"]}
+{"id": "homophone-001", "input": "their is a issue in the nightly job, looking in to it", "expected": "There is an issue in the nightly job; looking into it.", "tags": ["homophone", "article"]}
+{"id": "correct-001", "input": "Deployed the fix to staging. Can you verify?", "expected": "Deployed the fix to staging. Can you verify?", "tags": ["correct"]}
+{"id": "slack-001", "input": "<@U02ABC123> can u check `kubectl get pods -n unstract` output, its failing since morning :sweat:", "expected": "<@U02ABC123> can you check the `kubectl get pods -n unstract` output? It's been failing since morning :sweat:", "tags": ["slack-syntax", "typo", "tense"]}
+{"id": "slack-002", "input": "posted the doc in #platform-eng , pls review before friday https://example.com/doc", "expected": "Posted the doc in #platform-eng, please review before Friday https://example.com/doc", "tags": ["slack-syntax", "typo"]}

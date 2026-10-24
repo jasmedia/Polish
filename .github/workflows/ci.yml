@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      # On-device model tests skip themselves: Apple Intelligence isn't available on CI runners.
+      - name: PolishCore tests
+        run: make test-core
+      - name: App tests
+        run: make test-app
+      - name: Bundle the app (ad-hoc signed)
+        run: make app

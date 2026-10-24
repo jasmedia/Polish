@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Xcode (no project is committed; the app builds with SwiftPM + scripts/bundle.sh)
+Polish.xcodeproj/
+*.xcworkspace/
+!Packages/**/*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+*.xcresult
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Python (eval/)
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+eval/runs/
+
+# Release
+*.dmg
+*.zip
+
+# Local planning docs (snapshots of the live spec and plan)
+planning/

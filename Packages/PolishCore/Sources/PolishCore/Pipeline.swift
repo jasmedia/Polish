@@ -35,6 +35,7 @@ public struct PolishResult: Sendable {
         public var raw: String
         public var mistakes: [String]
         public var failures: [ValidationFailure]
+        public var usage: TokenUsage?
     }
 }
 
@@ -121,10 +122,13 @@ public final class Pipeline: Sendable {
             Change(from: protected.restore($0.from), to: protected.restore($0.to), reason: $0.reason)
         }
         let trace = PolishResult.Trace(placeholders: protected.tokens.count, chunks: traces, duration: clock.now - start)
+        let attempts = traces.flatMap(\.attempts)
+        let usage = attempts.compactMap(\.usage).reduce(TokenUsage(input: 0, output: 0), +)
         Log.engine.info("""
-            Polished: \(chunks.count, privacy: .public) chunk(s), \
-            \(traces.map(\.attempts.count).reduce(0, +), privacy: .public) attempt(s), \
-            \(fallbacks.count, privacy: .public) fallback(s), \(trace.duration.formatted(), privacy: .public)
+            Polished: \(chunks.count, privacy: .public) chunk(s), \(attempts.count, privacy: .public) attempt(s), \
+            \(fallbacks.count, privacy: .public) fallback(s), \
+            \(usage.input, privacy: .public) tokens in, \(usage.output, privacy: .public) out, \
+            \(trace.duration.formatted(.units(allowed: [.milliseconds], width: .narrow)), privacy: .public)
             """)
         return PolishResult(original: original, text: text, diff: Differ.diff(original: original, rewritten: text),
                             changes: changeList, fallbacks: fallbacks, trace: trace)
@@ -173,8 +177,16 @@ public final class Pipeline: Sendable {
                 }
                 throw polishError
             }
+            if let usage = response.usage {
+                Log.engine.debug("""
+                    Attempt at temperature \(temperature, format: .fixed(precision: 1), privacy: .public): \(usage.input, privacy: .public) tokens in, \
+                    \(usage.output, privacy: .public) out (cap \(attempt.maximumResponseTokens, privacy: .public), \
+                    context \(self.model.contextSize, privacy: .public))
+                    """)
+            }
             let failures = validator.validate(response.text, source: source)
-            attempts.append(.init(temperature: temperature, raw: response.text, mistakes: response.mistakes, failures: failures))
+            attempts.append(.init(temperature: temperature, raw: response.text, mistakes: response.mistakes,
+                                  failures: failures, usage: response.usage))
             if failures.isEmpty {
                 let text = Restorer.apply(response.text, source: source, keepWriterStyle: configuration.keepWriterStyle)
                 return Rewritten(text: text, changes: response.changes, fallbacks: [],

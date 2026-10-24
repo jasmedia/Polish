@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import PolishCore
 
@@ -62,6 +63,20 @@ final class ReviewModel {
 
     var failure: Failure? {
         if case .failed(let failure) = state { failure } else { nil }
+    }
+
+    /// What VoiceOver announces on each state change: the panel doesn't take VoiceOver focus from the
+    /// app being typed in, so the result has to be spoken.
+    var announcement: String {
+        switch state {
+        case .loading: return "Polishing"
+        case .result(let result):
+            let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let end = text.last.map { ".?!".contains($0) } == true ? "" : "."
+            return "Rewrite ready: \(text)\(end) Return to accept, Escape to cancel."
+        case .unchanged: return "Looks good. No changes needed."
+        case .failed(let failure): return failure.message
+        }
     }
 
     /// The text Accept puts back: the edit when the user edited, else the rewrite.

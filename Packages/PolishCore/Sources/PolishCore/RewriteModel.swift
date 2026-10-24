@@ -14,11 +14,28 @@ public struct GenerationResponse: Equatable, Sendable {
     public var text: String
     public var mistakes: [String]
     public var changes: [Change]
+    /// Tokens the model read (instructions, schema and prompt) and wrote, when the model reports them.
+    public var usage: TokenUsage?
 
-    public init(text: String, mistakes: [String] = [], changes: [Change] = []) {
+    public init(text: String, mistakes: [String] = [], changes: [Change] = [], usage: TokenUsage? = nil) {
         self.text = text
         self.mistakes = mistakes
         self.changes = changes
+        self.usage = usage
+    }
+}
+
+public struct TokenUsage: Equatable, Sendable {
+    public var input: Int
+    public var output: Int
+
+    public init(input: Int, output: Int) {
+        self.input = input
+        self.output = output
+    }
+
+    static func + (lhs: TokenUsage, rhs: TokenUsage) -> TokenUsage {
+        TokenUsage(input: lhs.input + rhs.input, output: lhs.output + rhs.output)
     }
 }
 
@@ -76,9 +93,16 @@ public final class FoundationModelBackend: RewriteModel {
         if request.withChanges {
             let result = try await session.respond(to: request.prompt, generating: RewriteWithChanges.self, options: options)
             let changes = result.content.changes.map { Change(from: $0.from, to: $0.to, reason: $0.reason) }
-            return GenerationResponse(text: result.content.text, mistakes: result.content.mistakes, changes: changes)
+            return GenerationResponse(text: result.content.text, mistakes: result.content.mistakes, changes: changes,
+                                      usage: TokenUsage(result.usage))
         }
         let result = try await session.respond(to: request.prompt, generating: RewriteWithMistakes.self, options: options)
-        return GenerationResponse(text: result.content.text, mistakes: result.content.mistakes)
+        return GenerationResponse(text: result.content.text, mistakes: result.content.mistakes, usage: TokenUsage(result.usage))
+    }
+}
+
+extension TokenUsage {
+    init(_ usage: LanguageModelSession.Usage) {
+        self.init(input: usage.input.totalTokenCount, output: usage.output.totalTokenCount)
     }
 }

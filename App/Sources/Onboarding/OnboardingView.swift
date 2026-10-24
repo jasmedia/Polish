@@ -13,6 +13,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Welcome to Polish")
                     .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
                 Text("Fixes grammar and spelling in your Slack drafts, entirely on this Mac.")
                     .foregroundStyle(.secondary)
             }
@@ -20,6 +21,7 @@ struct OnboardingView: View {
             step("keyboard", "Shortcut",
                  detail: "Click in a message and press the shortcut. Polish shows its fixes; Return puts them in, Esc keeps your text.") {
                 KeyboardShortcuts.Recorder(for: .polish)
+                    .accessibilityLabel("Polish shortcut")
             }
 
             // Accessibility trust has no change notification, so re-check every second while this is open.
@@ -45,6 +47,7 @@ struct OnboardingView: View {
                     Button("Open Settings…") { SystemSettings.open(.appleIntelligence) }
                 case .unavailable(.modelNotReady):
                     ProgressView().controlSize(.small)
+                        .accessibilityLabel("Downloading")
                 case .unavailable:
                     EmptyView()
                 }
@@ -66,6 +69,12 @@ struct OnboardingView: View {
         }
         .padding(24)
         .frame(width: 500)
+        .onExitCommand(perform: done)
+        .onChange(of: model.announcement) { _, announcement in
+            if let announcement {
+                AccessibilityNotification.Announcement(announcement).post()
+            }
+        }
     }
 
     private var sample: some View {
@@ -108,11 +117,14 @@ struct OnboardingView: View {
                 .foregroundStyle(.tint)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
+                Text(title)
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Text(detail)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .combine)
             Spacer(minLength: 12)
             trailing()
         }
@@ -127,5 +139,15 @@ struct OnboardingView: View {
 extension OnboardingModel {
     var isRunning: Bool {
         if case .running = state { true } else { false }
+    }
+
+    /// Spoken when the sample finishes, since the result appears below the focused button.
+    var announcement: String? {
+        switch state {
+        case .idle, .running: nil
+        case .result(let result) where result.isUnchanged: "Looks good. No changes needed."
+        case .result(let result): "Rewrite: \(result.text)"
+        case .failed(let message): message
+        }
     }
 }

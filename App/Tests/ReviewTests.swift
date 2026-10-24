@@ -14,6 +14,19 @@ struct ReviewTests {
         #expect(shown.contains("tmrw") && shown.contains("tomorrow."))
     }
 
+    @Test func announcesEachStateForVoiceOver() async throws {
+        let review = ReviewModel()
+        #expect(review.announcement == "Polishing")
+        review.state = .unchanged
+        #expect(review.announcement == "Looks good. No changes needed.")
+        review.state = .failed(.init(.notTrusted))
+        #expect(review.announcement == BridgeError.notTrusted.message)
+
+        let result = try await Pipeline(model: FixedModel(["I will send it tomorrow."])).polish(text: "i will send it tmrw")
+        review.state = .result(result)
+        #expect(review.announcement == "Rewrite ready: I will send it tomorrow. Return to accept, Escape to cancel.")
+    }
+
     // Primary screen 1000 pt tall; visible frame leaves room for the menu bar.
     let screens = [CGRect(x: 0, y: 0, width: 1440, height: 975)]
     let size = CGSize(width: 420, height: 200)

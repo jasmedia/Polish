@@ -31,7 +31,8 @@ final class ScriptedModel: RewriteModel {
         log.withLock { $0.append(request) }
         let reply = replies.withLock { $0.isEmpty ? Reply.echo { $0 } : $0.removeFirst() }
         switch reply {
-        case .text(let text): return GenerationResponse(text: text, mistakes: ["x"])
+        case .text(let text):
+            return GenerationResponse(text: text, mistakes: ["x"], usage: TokenUsage(input: 100, output: text.count / 4))
         case .echo(let transform): return GenerationResponse(text: transform(request.prompt))
         case .fail(let error): throw error
         }
@@ -39,6 +40,12 @@ final class ScriptedModel: RewriteModel {
 }
 
 struct PipelineTests {
+    @Test func recordsTokenUsagePerAttempt() async throws {
+        let model = ScriptedModel([.text("I will send you the report tomorrow.")])
+        let result = try await Pipeline(model: model).polish(text: "i will send u the report tmrw")
+        #expect(result.trace.chunks.flatMap(\.attempts).map(\.usage) == [TokenUsage(input: 100, output: 9)])
+    }
+
     @Test func protectsGeneratesAndRestores() async throws {
         let model = ScriptedModel([.text("⟦T1⟧, I will send you the report tomorrow.")])
         let result = try await Pipeline(model: model).polish(text: "<@U1> i will send u the report tmrw")

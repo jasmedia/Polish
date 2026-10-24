@@ -20,6 +20,11 @@ struct ReviewView: View {
         .padding(16)
         .frame(width: 420, alignment: .leading)
         .background(.regularMaterial, in: .rect(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Polish review")
+        .onChange(of: model.announcement, initial: true) { _, announcement in
+            AccessibilityNotification.Announcement(announcement).post()
+        }
     }
 
     @ViewBuilder
@@ -69,17 +74,21 @@ struct ReviewView: View {
             Spacer()
             Button("Cancel", action: controller.cancel)
                 .keyboardShortcut(.cancelAction)
+                .help("Keep your text (Esc)")
             if model.result != nil {
                 Button("Copy", action: controller.copy)
                     .keyboardShortcut("c")
+                    .help("Copy the rewrite (⌘C)")
                 if !model.isEditing {
                     Button("Edit") { model.isEditing = true }
                         .keyboardShortcut("e")
+                        .help("Edit the rewrite before accepting (⌘E)")
                 }
                 // Return types a newline while editing, so Accept moves to ⌘Return there.
                 Button("Accept", action: controller.accept)
                     .keyboardShortcut(.return, modifiers: model.isEditing ? .command : [])
                     .buttonStyle(.borderedProminent)
+                    .help(model.isEditing ? "Put the edited text back (⌘Return)" : "Put the rewrite back (Return)")
             } else if let action = model.failure?.action {
                 Button(action.title) { controller.perform(action) }
                     .keyboardShortcut(.defaultAction)

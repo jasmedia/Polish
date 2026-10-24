@@ -11,7 +11,7 @@ Polish is a macOS menu bar app that fixes grammar, spelling and wrong-word mista
 - Local snapshots of both: `planning/spec.md`, `planning/plan.md` (git-ignored; may lag the live docs)
 - **Keep the build plan current.** When a plan task is finished, tick it in the live plan doc in the same session, with a short note of what was done (file, count, score or decision). When a phase's exit check passes, tick its remaining items and add `Complete on <date>: <one-line result>` to the phase's intro line, before starting the next phase. Items not done stay unticked with a note on why or where they moved. The plan is a Claude Docs doc: edit it through the Claude Docs connector (read the doc, then `update` the checklist items), never by publishing the artifact.
 
-**Current phase:** Phase 1 (prompt spike) is done: `prompts/v1.txt` with the `mistakes` schema meets the exit check on the 210-row golden set (scores and open issues in `eval/RESULTS.md`). Next is Phase 2: port the Python pipeline in `eval/` (`protect.py`, `restore.py`, `run.py`) to PolishCore and reproduce those scores from Swift.
+**Current phase:** Phase 3 (MVP app) is in progress. The app shell, hotkey, text bridge (`App/Sources/Bridge`) and review panel (`App/Sources/Review`) are built and unit-tested; live testing in Slack is next. Phase 2's PolishCore port is merged, but its exit check is still open: Swift scores about 2 points lower than Python on unchanged-when-correct (`eval/RESULTS.md`).
 
 ## Commands
 

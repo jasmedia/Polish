@@ -11,12 +11,14 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "Packages/PolishCore"),
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "3.1.0"),
     ],
     targets: [
         .executableTarget(
             name: "Polish",
             dependencies: [
                 .product(name: "PolishCore", package: "PolishCore"),
+                .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
             ],
             path: "App/Sources"
         ),

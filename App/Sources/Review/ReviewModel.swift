@@ -49,12 +49,20 @@ final class ReviewModel {
     }
 
     var state: State
+    var tone: Tone
     var showRemovals = false
     var isEditing = false
     var editedText = ""
 
-    init(state: State = .loading) {
+    init(state: State = .loading, tone: Tone = .keep) {
         self.state = state
+        self.tone = tone
+    }
+
+    /// Tab regenerates in the next tone; not after an error, and not while editing (Tab types there).
+    var canChangeTone: Bool {
+        if case .failed = state { return false }
+        return !isEditing
     }
 
     var result: PolishResult? {
@@ -69,7 +77,7 @@ final class ReviewModel {
     /// app being typed in, so the result has to be spoken.
     var announcement: String {
         switch state {
-        case .loading: return "Polishing"
+        case .loading: return tone == .keep ? "Polishing" : "Polishing, \(tone.title)"
         case .result(let result):
             let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let end = text.last.map { ".?!".contains($0) } == true ? "" : "."

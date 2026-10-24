@@ -20,11 +20,12 @@ struct SettingsView: View {
 }
 
 private struct GeneralSettingsView: View {
-    let settings: SettingsStore
+    @Bindable var settings: SettingsStore
 
     var body: some View {
         Form {
             KeyboardShortcuts.Recorder("Polish shortcut:", name: .polish)
+            TonePicker(tone: $settings.tone, title: "Default tone")
             Toggle("Launch at login", isOn: Binding(
                 get: { settings.launchAtLogin },
                 set: { settings.setLaunchAtLogin($0) }

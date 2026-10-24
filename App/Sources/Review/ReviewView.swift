@@ -1,7 +1,7 @@
 import PolishCore
 import SwiftUI
 
-/// The panel's content. Keys: Return accept, ⌘E edit, ⌘C copy, Esc cancel (FR-5).
+/// The panel's content. Keys: Return accept, ⌘E edit, ⌘C copy, Tab next tone, Esc cancel (FR-5, FR-8).
 struct ReviewView: View {
     @Bindable var model: ReviewModel
     let controller: PolishController
@@ -9,6 +9,18 @@ struct ReviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if model.canChangeTone {
+                Button(action: controller.cycleTone) {
+                    Label(model.tone.title, systemImage: "dial.medium")
+                }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .keyboardShortcut(.tab, modifiers: [])
+                .help("Polish again in the next tone (Tab)")
+                .accessibilityLabel("Tone: \(model.tone.title)")
+                .accessibilityHint("Tab polishes again in the next tone")
+            }
             content
             if let result = model.result, result.didFallBack {
                 Label("Some parts were kept as you wrote them.", systemImage: "info.circle")

@@ -19,15 +19,18 @@ final class PolishController {
     @ObservationIgnored private let bridge: any TextBridging
     @ObservationIgnored private let pipeline: Pipeline
     @ObservationIgnored private unowned let presenter: any ReviewPresenting
+    @ObservationIgnored private let defaultTone: @MainActor () -> Tone
     @ObservationIgnored private var draft: Draft?
     /// The running read, polish or replace. Internal so tests can await it.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored var unchangedCloseDelay: Duration = .seconds(1.5)
 
-    init(bridge: any TextBridging, pipeline: Pipeline, presenter: any ReviewPresenting) {
+    init(bridge: any TextBridging, pipeline: Pipeline, presenter: any ReviewPresenting,
+         defaultTone: @escaping @MainActor () -> Tone = { .keep }) {
         self.bridge = bridge
         self.pipeline = pipeline
         self.presenter = presenter
+        self.defaultTone = defaultTone
     }
 
     func polishFocusedField() {
@@ -65,6 +68,15 @@ final class PolishController {
         dismiss()
     }
 
+    /// Tab in the panel: polish the same draft again in the next tone (FR-8). The default tone stays.
+    func cycleTone() {
+        guard let review, review.canChangeTone, let draft else { return }
+        work?.cancel()
+        review.tone = review.tone.next
+        pipeline.prewarm(tone: review.tone)
+        work = Task { await polish(draft.text, into: review) }
+    }
+
     func perform(_ action: ReviewModel.Failure.Action) {
         switch action {
         case .openAccessibilitySettings:
@@ -87,7 +99,8 @@ final class PolishController {
 
     private func start(read: @escaping @MainActor (any TextBridging) async throws -> Draft) {
         cancel()
-        pipeline.prewarm()
+        let tone = defaultTone()
+        pipeline.prewarm(tone: tone)
         let clock = ContinuousClock()
         let pressed = clock.now
         work = Task {
@@ -104,7 +117,7 @@ final class PolishController {
             }
             guard !Task.isCancelled else { return }
             self.draft = draft
-            let review = ReviewModel()
+            let review = ReviewModel(tone: tone)
             show(review, near: draft.anchor)
             Log.ui.info("Hotkey to panel: \((clock.now - pressed).milliseconds, privacy: .public)")
             await polish(draft.text, into: review, pressed: pressed)
@@ -115,7 +128,7 @@ final class PolishController {
     private func polish(_ text: String, into review: ReviewModel, pressed: ContinuousClock.Instant? = nil) async {
         review.state = .loading
         do {
-            let result = try await pipeline.polish(text: text)
+            let result = try await pipeline.polish(text: text, tone: review.tone)
             guard !Task.isCancelled, self.review === review else { return }
             logResultTime(since: pressed)
             if result.isUnchanged {

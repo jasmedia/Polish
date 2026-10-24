@@ -15,16 +15,23 @@ final class SettingsStore {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.onboardingCompleted) }
     }
 
+    /// The tone each polish starts with (FR-8). Tab in the review panel changes it for one message only.
+    var tone: Tone {
+        didSet { defaults.set(tone.rawValue, forKey: Keys.tone) }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
         static let onboardingCompleted = "onboardingCompleted"
+        static let tone = "tone"
     }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         launchAtLogin = SMAppService.mainApp.status == .enabled
         hasCompletedOnboarding = defaults.bool(forKey: Keys.onboardingCompleted)
+        tone = defaults.string(forKey: Keys.tone).flatMap(Tone.init(rawValue:)) ?? .keep
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {

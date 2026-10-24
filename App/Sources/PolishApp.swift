@@ -30,7 +30,8 @@ final class AppModel {
 
     init() {
         let pipeline = Pipeline()
-        controller = PolishController(bridge: AccessibilityBridge(), pipeline: pipeline, presenter: presenter)
+        controller = PolishController(bridge: AccessibilityBridge(), pipeline: pipeline, presenter: presenter,
+                                      defaultTone: { [settings] in settings.tone })
         presenter.controller = controller
         status = ModelStatusModel(updates: ModelAvailability.updates())
         status.onChange = { [controller] in controller.modelStatusChanged($0) }
@@ -67,6 +68,8 @@ private struct MenuContent: View {
         Button("Polish Clipboard") {
             app.controller.polishClipboard()
         }
+        @Bindable var settings = app.settings
+        TonePicker(tone: $settings.tone, title: "Tone")
         Divider()
         Button("Welcome Guide…") {
             app.showOnboarding()

@@ -6,11 +6,11 @@ import PolishCore
 
 /// A model that returns fixed rewrites, so the controller runs without Apple Intelligence.
 final class FixedModel: RewriteModel {
-    private let state: Mutex<(status: ModelStatus, replies: [String])>
+    private let state: Mutex<(status: ModelStatus, replies: [String], requests: [GenerationRequest])>
     let contextSize = 8192
 
     init(_ replies: [String], status: ModelStatus = .ready) {
-        state = Mutex((status, replies))
+        state = Mutex((status, replies, []))
     }
 
     var status: ModelStatus {
@@ -18,12 +18,17 @@ final class FixedModel: RewriteModel {
         set { state.withLock { $0.status = newValue } }
     }
 
+    var requests: [GenerationRequest] { state.withLock { $0.requests } }
+
     func tokenCount(prompt: String) async throws -> Int { prompt.split(whereSeparator: \.isWhitespace).count }
     func tokenCount(instructions: String, withChanges: Bool) async throws -> Int { 100 }
     func prewarm(instructions: String) {}
 
     func generate(_ request: GenerationRequest) async throws -> GenerationResponse {
-        let text = state.withLock { $0.replies.isEmpty ? request.prompt : $0.replies.removeFirst() }
+        let text = state.withLock {
+            $0.requests.append(request)
+            return $0.replies.isEmpty ? request.prompt : $0.replies.removeFirst()
+        }
         return GenerationResponse(text: text, mistakes: ["x"])
     }
 }
@@ -71,8 +76,9 @@ final class RecordingPresenter: ReviewPresenting {
 struct PolishControllerTests {
     let presenter = RecordingPresenter()
 
-    func controller(_ bridge: FakeBridge, _ model: FixedModel) -> PolishController {
-        let controller = PolishController(bridge: bridge, pipeline: Pipeline(model: model), presenter: presenter)
+    func controller(_ bridge: FakeBridge, _ model: FixedModel, tone: Tone = .keep) -> PolishController {
+        let controller = PolishController(bridge: bridge, pipeline: Pipeline(model: model), presenter: presenter,
+                                          defaultTone: { tone })
         controller.unchangedCloseDelay = .zero
         return controller
     }
@@ -181,5 +187,48 @@ struct PolishControllerTests {
         controller.copy()
         #expect(bridge.copied == ["I will send the report tomorrow."])
         #expect(bridge.replaced.isEmpty)
+    }
+
+    @Test func polishesInTheDefaultTone() async {
+        let bridge = FakeBridge("i will send the report tmrw")
+        let model = FixedModel(["Hey, I'll send the report tomorrow!"])
+        let controller = controller(bridge, model, tone: .casual)
+        controller.polishFocusedField()
+        await controller.work?.value
+        #expect(controller.review?.tone == .casual)
+        #expect(model.requests.map(\.instructions).allSatisfy { $0.contains("Tone: casual") })
+    }
+
+    @Test func tabPolishesAgainInTheNextTone() async {
+        let bridge = FakeBridge("i will send the report tmrw")
+        let model = FixedModel(["I will send the report tomorrow.", "Hey, I'll send the report tomorrow!"])
+        let controller = controller(bridge, model)
+        controller.polishFocusedField()
+        await controller.work?.value
+        controller.cycleTone()
+        await controller.work?.value
+        #expect(controller.review?.tone == .casual)
+        #expect(model.requests.last?.instructions.contains("Tone: casual") == true)
+        #expect(controller.review?.result?.text == "Hey, I'll send the report tomorrow!")
+
+        controller.accept()
+        await controller.work?.value
+        #expect(bridge.replaced == ["Hey, I'll send the report tomorrow!"])
+    }
+
+    @Test func tabDoesNothingAfterAnError() async {
+        let bridge = FakeBridge("i will send the report tmrw")
+        let model = FixedModel([], status: .unavailable(.appleIntelligenceNotEnabled))
+        let controller = controller(bridge, model)
+        controller.polishFocusedField()
+        await controller.work?.value
+        controller.cycleTone()
+        await controller.work?.value
+        #expect(controller.review?.tone == .keep)
+        #expect(controller.review?.failure != nil)
+    }
+
+    @Test func toneCyclesThroughAllAndWraps() {
+        #expect(Tone.allCases.map(\.next) == [.casual, .professional, .concise, .keep])
     }
 }

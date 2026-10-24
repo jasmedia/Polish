@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import PolishCore
 import ServiceManagement
@@ -9,8 +10,21 @@ final class SettingsStore {
     private(set) var launchAtLogin: Bool
     private(set) var launchAtLoginError: String?
 
-    init() {
+    /// Set once the first-run window has been closed.
+    var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.onboardingCompleted) }
+    }
+
+    @ObservationIgnored private let defaults: UserDefaults
+
+    private enum Keys {
+        static let onboardingCompleted = "onboardingCompleted"
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        hasCompletedOnboarding = defaults.bool(forKey: Keys.onboardingCompleted)
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {

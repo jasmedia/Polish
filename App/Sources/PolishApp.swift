@@ -25,18 +25,35 @@ final class AppModel {
     let settings = SettingsStore()
     let controller: PolishController
     @ObservationIgnored private let presenter = ReviewPanelPresenter()
+    @ObservationIgnored private var onboarding: OnboardingWindowController?
     @ObservationIgnored private var hotkeyTask: Task<Void, Never>?
 
     init() {
-        controller = PolishController(bridge: AccessibilityBridge(), pipeline: Pipeline(), presenter: presenter)
+        let pipeline = Pipeline()
+        controller = PolishController(bridge: AccessibilityBridge(), pipeline: pipeline, presenter: presenter)
         presenter.controller = controller
         status = ModelStatusModel(updates: ModelAvailability.updates())
         status.onChange = { [controller] in controller.modelStatusChanged($0) }
+        let onboardingModel = OnboardingModel(pipeline: pipeline)
+        onboarding = OnboardingWindowController(
+            makeView: { [status] done in
+                AnyView(OnboardingView(model: onboardingModel, status: status, done: done))
+            },
+            onFinish: { [settings] in settings.hasCompletedOnboarding = true }
+        )
+        if !settings.hasCompletedOnboarding {
+            // After launch finishes; the app can't activate or show windows from inside App.init.
+            Task { [weak self] in self?.showOnboarding() }
+        }
         hotkeyTask = Task { [controller] in
             for await _ in KeyboardShortcuts.events(.keyUp, for: .polish) {
                 controller.polishFocusedField()
             }
         }
+    }
+
+    func showOnboarding() {
+        onboarding?.show()
     }
 }
 
@@ -51,6 +68,9 @@ private struct MenuContent: View {
             app.controller.polishClipboard()
         }
         Divider()
+        Button("Welcome Guide…") {
+            app.showOnboarding()
+        }
         Button("Settings…") {
             // A menu bar app isn't active, so its Settings window would open behind other apps.
             NSApplication.shared.activate()

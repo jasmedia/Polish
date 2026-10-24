@@ -1,0 +1,16 @@
+{
+  "required" : [
+    "text"
+  ],
+  "additionalProperties" : false,
+  "properties" : {
+    "text" : {
+      "type" : "string"
+    }
+  },
+  "title" : "RewriteTextOnly",
+  "x-order" : [
+    "text"
+  ],
+  "type" : "object"
+}

@@ -11,7 +11,9 @@ One JSON object per line in `golden.jsonl`.
 | `tags` | string[] | Any of: `typo`, `homophone`, `article`, `tense`, `agreement`, `run-on`, `rewrite`, `correct`, `slack-syntax`, `long`, `mention` (display-name mentions such as `@Alex Morgan`), `apostrophe` (quote style must be kept exactly), `reference` (a real draft and its ChatGPT rewrite, anonymized) |
 
 Target mix (Phase 1): 120 rows with mistakes, 40 correct, 40 Slack-syntax stress cases, 10 long.
-Use US English spelling in `expected`. Slack tokens (`<@U123>`, `#channel`, `:emoji:`, URLs, code) must appear in `expected` exactly as in `input`.
+Use US English spelling in `expected`. Slack tokens (`<@U123>`, `#channel`, `:emoji:`, URLs, code, and whole `*bold*` / `_italic_` / `~strike~` spans) must appear in `expected` exactly as in `input`.
+
+**Shorthand:** expand chat shorthand (`u`, `pls`, `thx`, `tmrw`, `org`, `env`, `prod`, `approx`, `OOO`); keep common work words (`doc`, `docs`, `PR`, `repo`, `config`, `deploy`). Keep correct contractions and casual words (`I'll`, `Congrats`) in `correct` rows.
 
 **Mentions:** a display-name mention (`@` plus up to three Title Case words, or `@here` / `@channel` / `@everyone`) must appear in `expected` exactly as in `input`. A lowercase word or a common sentence-start word (`We`, `I`, `Can`, `Please`, `The`…) right after a mention is not part of it: in `@Alex can you…` and `@Sam We can…` only `@Alex` and `@Sam` are protected, and the rest may be rewritten.
 

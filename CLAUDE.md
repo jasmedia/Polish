@@ -10,7 +10,7 @@ Polish is a macOS menu bar app that fixes grammar, spelling and wrong-word mista
 - Build plan with phase checklists: https://claude.ai/artifact/Hqmz1ZXymNjqxRCAgCiyhM
 - Local snapshots of both: `planning/spec.md`, `planning/plan.md` (git-ignored; may lag the live docs)
 
-**Current phase:** Phase 0 (setup) is done: the menu bar app runs and shows model status. Next is Phase 1, the prompt spike: build the golden set, prototype placeholder protection in Python, and tune `prompts/v1.txt` with `fm` and the Python SDK.
+**Current phase:** Phase 1 (prompt spike) is done: `prompts/v1.txt` with the `mistakes` schema meets the exit check on the 210-row golden set (scores and open issues in `eval/RESULTS.md`). Next is Phase 2: port the Python pipeline in `eval/` (`protect.py`, `restore.py`, `run.py`) to PolishCore and reproduce those scores from Swift.
 
 ## Commands
 
@@ -38,7 +38,7 @@ There is **no Xcode project**. The app is a SwiftPM executable (`Package.swift`,
 | `Packages/PolishCore/` | UI-free engine: protector, chunker, rewriter, validator, differ. All model calls live here |
 | `eval/` | Python evaluation with `apple-fm-sdk` (uv project, macOS only) |
 | `golden/golden.jsonl` | Golden test set shared by Python and Swift evals; schema in `golden/README.md` |
-| `prompts/` | Versioned model instructions; `{tone}` is a template slot |
+| `prompts/` | Versioned model instructions; `{tone}` and `{placeholders}` are template slots. `{placeholders}` gets the placeholder rule (naming each `⟦Tn⟧`, plus a keep-at-start line when the draft opens with a mention) only when the draft has placeholders; otherwise the model invents `⟦T1⟧`. Rule texts: `PLACEHOLDER_RULE`, `LEADING_RULE` in `eval/run.py` |
 | `scripts/` | `bundle.sh`, `run.sh`, `bootstrap.sh` |
 
 ## Rewrite pipeline (PolishCore)
@@ -46,9 +46,9 @@ There is **no Xcode project**. The app is a SwiftPM executable (`Package.swift`,
 1. **Normalize** whitespace, keep list markers.
 2. **Protect** Slack tokens, mentions and personal-dictionary words → placeholders `⟦T1⟧`, `⟦T2⟧`… plus a map. Code blocks collapse to one placeholder. Record the draft's apostrophe style.
 3. **Budget** tokens with `SystemLanguageModel.tokenUsage(for:)` against `contextSize`; chunk on paragraph, then sentence boundaries if over ~70%.
-4. **Generate** with a new `LanguageModelSession` per request, guided generation into a `@Generable` type, temperature 0.2.
-5. **Validate**: every placeholder exactly once, length between −40% and +60% of the input (Concise: down to −60%), non-empty. On failure retry once at temperature 0, then return the original.
-6. **Restore** placeholders, rejoin chunks, convert apostrophes and quotes to the recorded style, word-level diff for the panel.
+4. **Generate** with a new `LanguageModelSession` per request, temperature 0.2, `maximumResponseTokens` capped (≈ input chars / 2 + 200). Guided generation into `RewriteWithMistakes { mistakes: [String] (max 10), text: String }`: listing mistakes first keeps the model from editing correct text; the list itself is not used.
+5. **Validate**: every placeholder exactly once, no merged or dropped lines (non-blank line count ≥ input's), length between −40% and +60% of the input (Concise: down to −60%), non-empty. On failure retry once at temperature 0, then return the original.
+6. **Restore**: put lines back into the draft's blank-line layout, undo expansions of contractions and `doc`/`config`/`repo` the draft used, convert quotes to the recorded style, restore placeholders, rejoin chunks, word-level diff for the panel.
 
 The model never sees raw Slack syntax. Placeholder integrity is enforced by validation, never trusted to the model.
 

@@ -1,0 +1,50 @@
+{"id": "apostrophe-001", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "apostrophe-004", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "long-005", "meaning": 1, "voice": 1, "corrected": 0, "note": "partial: lowercase sentence starts, 'make', 'need', 'instructions is' left"}
+{"id": "long-008", "meaning": 1, "voice": 1, "corrected": 0, "note": "partial: lowercase starts, 'need', 'wasn't' left"}
+{"id": "sent-001", "meaning": 1, "voice": 1, "corrected": 0, "note": "lowercase start, splices, 'for next one hour' left"}
+{"id": "sent-005", "meaning": 1, "voice": 1, "corrected": 0, "note": "unchanged: 'revert back' left"}
+{"id": "sent-008", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-009", "meaning": 1, "voice": 1, "corrected": 0, "note": "'a expired' left"}
+{"id": "sent-011", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-013", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-015", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-017", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-019", "meaning": 1, "voice": 1, "corrected": 0, "note": "unchanged"}
+{"id": "sent-025", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-026", "meaning": 1, "voice": 1, "corrected": 0, "note": "run-on left"}
+{"id": "sent-032", "meaning": 1, "voice": 1, "corrected": 0, "note": "no comma after addressee, tense left"}
+{"id": "sent-033", "meaning": 1, "voice": 1, "corrected": 0, "note": "lowercase start left"}
+{"id": "sent-038", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "sent-045", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "sent-046", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "sent-047", "meaning": 1, "voice": 0, "corrected": 1, "note": "dropped 'pls': reads as an order"}
+{"id": "sent-050", "meaning": 1, "voice": 1, "corrected": 0, "note": "'is in good direction' is wrong"}
+{"id": "sent-053", "meaning": 1, "voice": 1, "corrected": 0, "note": "run-on left"}
+{"id": "slack-007", "meaning": 1, "voice": 1, "corrected": 0, "note": "unchanged: 'calender', lowercase Thursday left"}
+{"id": "slack-008", "meaning": 1, "voice": 1, "corrected": 0, "note": "no comma or question mark"}
+{"id": "slack-015", "meaning": 1, "voice": 0, "corrected": 1, "note": "dropped 'pls': reads as an order"}
+{"id": "slack-016", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "slack-018", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "slack-022", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "slack-024", "meaning": 1, "voice": 1, "corrected": 0, "note": "'a expired' left"}
+{"id": "slack-027", "meaning": 1, "voice": 1, "corrected": 0, "note": "fallback: model merged lines"}
+{"id": "slack-029", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "slack-036", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "word-008", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-010", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-012", "meaning": 1, "voice": 1, "corrected": 0, "note": "question mark on the wrong clause"}
+{"id": "word-014", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-018", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-023", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-026", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-027", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "word-031", "meaning": 1, "voice": 1, "corrected": 0, "note": "'from morning' left"}
+{"id": "word-032", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice left"}
+{"id": "word-035", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-037", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-038", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-046", "meaning": 1, "voice": 1, "corrected": 1, "note": ""}
+{"id": "word-048", "meaning": 1, "voice": 1, "corrected": 0, "note": "comma splice, no period"}
+{"id": "word-049", "meaning": 1, "voice": 1, "corrected": 0, "note": "'Anyone knows' left"}
+{"id": "word-051", "meaning": 1, "voice": 1, "corrected": 0, "note": "'inform that', 'between warehouse' left"}

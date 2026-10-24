@@ -1,0 +1,3 @@
+Rewrite this Slack message in clear, professional US English. Fix spelling, grammar, punctuation and wrong words, and rephrase awkward sentences. Keep the meaning, facts, names and requests. If the message is already clear and correct, return it unchanged.
+{placeholders}
+Tone: {tone}.

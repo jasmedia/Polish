@@ -14,15 +14,6 @@ struct ReviewTests {
         #expect(shown.contains("tmrw") && shown.contains("tomorrow."))
     }
 
-    @Test(arguments: [
-        ("@Alex can you check this", true),
-        ("ping me at alex@example.com", false),
-        ("no mentions here", false),
-    ])
-    func mentionWarning(draft: String, warns: Bool) {
-        #expect(ReviewModel(draft: draft).pastesMentionsAsText == warns)
-    }
-
     // Primary screen 1000 pt tall; visible frame leaves room for the menu bar.
     let screens = [CGRect(x: 0, y: 0, width: 1440, height: 975)]
     let size = CGSize(width: 420, height: 200)

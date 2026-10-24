@@ -12,7 +12,7 @@ struct ReviewPanelTests {
         let presenter = RecordingPresenter()
         let controller = PolishController(bridge: FakeBridge("x"), pipeline: Pipeline(model: FixedModel([])),
                                           presenter: presenter)
-        let review = ReviewModel(draft: "@Athul i will continu developing it tmrw")
+        let review = ReviewModel()
         let panel = ReviewPanel(content: ReviewView(model: review, controller: controller))
         panel.setFrameTopLeftPoint(CGPoint(x: 200, y: 800))
         panel.orderFront(nil)

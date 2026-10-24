@@ -48,15 +48,12 @@ final class ReviewModel {
     }
 
     var state: State
-    /// The plain-text path turns Slack mentions into ordinary words; the panel says so.
-    let pastesMentionsAsText: Bool
     var showRemovals = false
     var isEditing = false
     var editedText = ""
 
-    init(draft: String, state: State = .loading) {
+    init(state: State = .loading) {
         self.state = state
-        pastesMentionsAsText = draft.contains(/(?:^|\s)@[A-Za-z]/)
     }
 
     var result: PolishResult? {

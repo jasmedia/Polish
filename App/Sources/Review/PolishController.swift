@@ -48,7 +48,7 @@ final class PolishController {
                 let failure = (error as? BridgeError).map(ReviewModel.Failure.init)
                     ?? ReviewModel.Failure(message: "Couldn't put the rewrite back. Your text wasn't changed.")
                 Log.bridge.error("Replace failed: \(String(describing: error), privacy: .public)")
-                show(ReviewModel(draft: "", state: .failed(failure)), near: draft.anchor)
+                show(ReviewModel(state: .failed(failure)), near: draft.anchor)
             }
         }
     }
@@ -99,12 +99,12 @@ final class PolishController {
                 let failure = (error as? BridgeError).map(ReviewModel.Failure.init)
                     ?? ReviewModel.Failure(message: "Couldn't read the text.")
                 Log.bridge.error("Read failed: \(String(describing: error), privacy: .public)")
-                show(ReviewModel(draft: "", state: .failed(failure)), near: nil)
+                show(ReviewModel(state: .failed(failure)), near: nil)
                 return
             }
             guard !Task.isCancelled else { return }
             self.draft = draft
-            let review = ReviewModel(draft: draft.text)
+            let review = ReviewModel()
             show(review, near: draft.anchor)
             Log.ui.info("Hotkey to panel: \((clock.now - pressed).milliseconds, privacy: .public)")
             await polish(draft.text, into: review, pressed: pressed)

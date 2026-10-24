@@ -86,11 +86,11 @@ The model never sees raw Slack syntax. Placeholder integrity is enforced by vali
 
 Review panel is always shown (no auto-replace); US spelling; ChatGPT-level rewriting, not minimal fixes; on-device model only; personal dictionary ships empty; name is Polish; MIT license.
 
-**Mentions:** the Slack composer carries mentions as display names (`@Alex Morgan`), not `<@U123>`, and pasting plain text back turns a mention into ordinary words. Protect them in this order:
-1. **Rich pasteboard first.** After ⌘C, read Slack's HTML pasteboard type, take mention spans from its markup, protect each as one placeholder, and paste back HTML with those spans unchanged so the mentions stay linked. Whether Slack's markup marks mentions is unverified; check it in a Phase 1 spike.
+**Mentions:** the Slack composer carries mentions as display names (`@Alex Morgan`), not `<@U123>`, Protect them in this order:
+1. **Rich pasteboard first.** After ⌘C, read Slack's HTML pasteboard type, take mention spans from its markup, protect each as one placeholder, and paste back HTML with those spans unchanged so the mentions stay linked. Whether Slack's markup marks mentions is unverified; not needed while plain-text paste keeps mentions linked (4).
 2. **Plain-text fallback.** Protect `@` plus up to three following Title Case words (`@Alex Morgan Lee`), stopping at punctuation, a lowercase word (`@Alex can you…` protects `@Alex`), or a common sentence-start word such as `We`, `I`, `Can`, `Please`, `The` (`@Sam We can…` protects `@Sam`). Over-protecting is preferred to splitting a name. `@here`, `@channel` and `@everyone` are always single tokens.
 3. **Personal dictionary overrides.** Dictionary names match exactly, for cases like `@de la Cruz`.
-4. **Warn, don't guess.** With only plain text and at least one mention, the review panel says mentions will paste as plain text.
+4. **Plain-text paste keeps mentions.** Checked in Slack desktop on 2026-10-24: pasting `@Athul` back as plain text leaves it a linked mention, so the review panel shows no warning. Revisit if a name stops re-linking (for example, two people with the same display name).
 
 **Apostrophes:** keep the user's style. Detect straight (`'`) vs curly (`’`) in the draft (default straight when there are none) and convert the model's output to match after Restore, in code, not in the prompt. Placeholders (code, links) are never converted. Golden scoring compares quotes loosely except on rows tagged `apostrophe`.
 

@@ -10,11 +10,6 @@ struct ReviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             content
-            if model.result != nil, model.pastesMentionsAsText {
-                Label("Mentions will paste as plain text.", systemImage: "at")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             if let result = model.result, result.didFallBack {
                 Label("Some parts were kept as you wrote them.", systemImage: "info.circle")
                     .font(.caption)

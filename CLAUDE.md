@@ -44,11 +44,11 @@ There is **no Xcode project**. The app is a SwiftPM executable (`Package.swift`,
 ## Rewrite pipeline (PolishCore)
 
 1. **Normalize** whitespace, keep list markers.
-2. **Protect** Slack tokens and personal-dictionary words → placeholders `⟦T1⟧`, `⟦T2⟧`… plus a map. Code blocks collapse to one placeholder.
+2. **Protect** Slack tokens, mentions and personal-dictionary words → placeholders `⟦T1⟧`, `⟦T2⟧`… plus a map. Code blocks collapse to one placeholder. Record the draft's apostrophe style.
 3. **Budget** tokens with `SystemLanguageModel.tokenUsage(for:)` against `contextSize`; chunk on paragraph, then sentence boundaries if over ~70%.
 4. **Generate** with a new `LanguageModelSession` per request, guided generation into a `@Generable` type, temperature 0.2.
 5. **Validate**: every placeholder exactly once, length between −40% and +60% of the input (Concise: down to −60%), non-empty. On failure retry once at temperature 0, then return the original.
-6. **Restore** placeholders, rejoin chunks, word-level diff for the panel.
+6. **Restore** placeholders, rejoin chunks, convert apostrophes and quotes to the recorded style, word-level diff for the panel.
 
 The model never sees raw Slack syntax. Placeholder integrity is enforced by validation, never trusted to the model.
 
@@ -81,7 +81,13 @@ The model never sees raw Slack syntax. Placeholder integrity is enforced by vali
 
 Review panel is always shown (no auto-replace); US spelling; ChatGPT-level rewriting, not minimal fixes; on-device model only; personal dictionary ships empty; name is Polish; MIT license.
 
-**Open:** Slack composer text carries mentions as multi-word display names (`@Alex Morgan`), not `<@U123>`; how to protect them is undecided. Straight vs curly apostrophes is undecided (golden rows use straight).
+**Mentions:** the Slack composer carries mentions as display names (`@Alex Morgan`), not `<@U123>`, and pasting plain text back turns a mention into ordinary words. Protect them in this order:
+1. **Rich pasteboard first.** After ⌘C, read Slack's HTML pasteboard type, take mention spans from its markup, protect each as one placeholder, and paste back HTML with those spans unchanged so the mentions stay linked. Whether Slack's markup marks mentions is unverified; check it in a Phase 1 spike.
+2. **Plain-text fallback.** Protect `@` plus up to three following Title Case words (`@Alex Morgan Lee`), stopping at punctuation, a lowercase word (`@Alex can you…` protects `@Alex`), or a common sentence-start word such as `We`, `I`, `Can`, `Please`, `The` (`@Sam We can…` protects `@Sam`). Over-protecting is preferred to splitting a name. `@here`, `@channel` and `@everyone` are always single tokens.
+3. **Personal dictionary overrides.** Dictionary names match exactly, for cases like `@de la Cruz`.
+4. **Warn, don't guess.** With only plain text and at least one mention, the review panel says mentions will paste as plain text.
+
+**Apostrophes:** keep the user's style. Detect straight (`'`) vs curly (`’`) in the draft (default straight when there are none) and convert the model's output to match after Restore, in code, not in the prompt. Placeholders (code, links) are never converted. Golden scoring compares quotes loosely except on rows tagged `apostrophe`.
 
 ## Repo
 

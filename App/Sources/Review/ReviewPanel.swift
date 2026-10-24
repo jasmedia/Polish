@@ -15,22 +15,31 @@ final class ReviewPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        let hosting = NSHostingController(rootView: content)
-        hosting.sizingOptions = [.preferredContentSize]
-        contentViewController = hosting
+        // The hosting view must not size the window itself: moving the origin while it does (to keep
+        // the top edge fixed) re-enters layout until the stack overflows. The content reports its
+        // size instead, and `fit` resizes the window after the layout pass.
+        let hosting = NSHostingView(rootView: AnyView(EmptyView()))
+        hosting.sizingOptions = []
+        hosting.rootView = AnyView(content
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGSize.self, of: \.size) { [weak self] size in
+                MainActor.assumeIsolated { self?.fit(size) }
+            })
+        contentView = hosting
+        setContentSize(hosting.fittingSize)
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    /// Grow and shrink downward from the top edge as the content changes (loading → result).
-    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
-        var rect = frameRect
-        if isVisible, rect.size != frame.size, rect.origin == frame.origin {
-            rect.origin.y = frame.maxY - rect.height
+    /// Grows and shrinks downward from the top edge as the content changes (loading → result).
+    private func fit(_ size: CGSize) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, size.width > 0, size.height > 0, size != frame.size else { return }
+            setFrame(NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height),
+                     display: true)
+            invalidateShadow()
         }
-        super.setFrame(rect, display: flag)
-        invalidateShadow()
     }
 }
 

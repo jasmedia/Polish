@@ -106,17 +106,18 @@ final class PolishController {
             self.draft = draft
             let review = ReviewModel(draft: draft.text)
             show(review, near: draft.anchor)
-            Log.ui.info("Hotkey to panel: \((clock.now - pressed).formatted(), privacy: .public)")
-            await polish(draft.text, into: review)
-            Log.ui.info("Hotkey to result: \((clock.now - pressed).formatted(), privacy: .public)")
+            Log.ui.info("Hotkey to panel: \((clock.now - pressed).milliseconds, privacy: .public)")
+            await polish(draft.text, into: review, pressed: pressed)
         }
     }
 
-    private func polish(_ text: String, into review: ReviewModel) async {
+    /// `pressed` is when the hotkey fired; when given, the time to the result or error is logged.
+    private func polish(_ text: String, into review: ReviewModel, pressed: ContinuousClock.Instant? = nil) async {
         review.state = .loading
         do {
             let result = try await pipeline.polish(text: text)
             guard !Task.isCancelled, self.review === review else { return }
+            logResultTime(since: pressed)
             if result.isUnchanged {
                 review.state = .unchanged
                 try await Task.sleep(for: unchangedCloseDelay)
@@ -129,8 +130,14 @@ final class PolishController {
             guard !Task.isCancelled, !(error is CancellationError), self.review === review else { return }
             let polishError = error as? PolishError ?? .generationFailed(code: String(describing: type(of: error)))
             Log.engine.error("Polish failed: \(polishError.code, privacy: .public)")
+            logResultTime(since: pressed)
             review.state = .failed(ReviewModel.Failure(polishError))
         }
+    }
+
+    private func logResultTime(since pressed: ContinuousClock.Instant?) {
+        guard let pressed else { return }
+        Log.ui.info("Hotkey to result: \((ContinuousClock.now - pressed).milliseconds, privacy: .public)")
     }
 
     private func show(_ review: ReviewModel, near anchor: CGRect?) {
@@ -141,5 +148,12 @@ final class PolishController {
     private func dismiss() {
         review = nil
         presenter.close()
+    }
+}
+
+private extension Duration {
+    /// Whole milliseconds ("142ms"), to check the latency targets: < 150 ms to panel, < 3 s to result.
+    var milliseconds: String {
+        formatted(.units(allowed: [.milliseconds], width: .narrow))
     }
 }

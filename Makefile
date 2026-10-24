@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SUBSYSTEM := com.jasmedia.polish
 
-.PHONY: help build app run test test-core test-app logs eval-setup check-model clean
+.PHONY: help build app run test test-core test-app logs eval-setup eval-swift check-model clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -29,6 +29,9 @@ logs: ## Stream the app's logs
 
 eval-setup: ## Create the Python eval environment (eval/)
 	uv sync --project eval
+
+eval-swift: ## Golden set through the Swift pipeline (polish-cli), writes eval/runs/*.jsonl
+	swift run -c release --package-path Packages/PolishCore polish-cli golden
 
 check-model: ## Smoke-test the on-device model via fm and the Python SDK
 	fm respond "Reply with the single word: ready"

@@ -9,6 +9,7 @@ Polish is a macOS menu bar app that fixes grammar, spelling and wrong-word mista
 - Spec (source of truth): https://claude.ai/artifact/1ibnjtHxYLnoH8yfenoM2U
 - Build plan with phase checklists: https://claude.ai/artifact/Hqmz1ZXymNjqxRCAgCiyhM
 - Local snapshots of both: `planning/spec.md`, `planning/plan.md` (git-ignored; may lag the live docs)
+- **Keep the build plan current.** When a plan task is finished, tick it in the live plan doc in the same session, with a short note of what was done (file, count, score or decision). When a phase's exit check passes, tick its remaining items and add `Complete on <date>: <one-line result>` to the phase's intro line, before starting the next phase. Items not done stay unticked with a note on why or where they moved. The plan is a Claude Docs doc: edit it through the Claude Docs connector (read the doc, then `update` the checklist items), never by publishing the artifact.
 
 **Current phase:** Phase 1 (prompt spike) is done: `prompts/v1.txt` with the `mistakes` schema meets the exit check on the 210-row golden set (scores and open issues in `eval/RESULTS.md`). Next is Phase 2: port the Python pipeline in `eval/` (`protect.py`, `restore.py`, `run.py`) to PolishCore and reproduce those scores from Swift.
 
@@ -23,6 +24,8 @@ make app          # bundle only; CONFIG=release make app for release
 make logs         # log stream for subsystem com.jasmedia.polish
 make eval-setup   # uv sync --project eval
 make check-model  # fm + Python SDK smoke test
+make eval-swift   # golden set through the Swift pipeline → eval/runs/*.jsonl (needs the model)
+swift run --package-path Packages/PolishCore polish-cli rewrite "..."  # one draft through PolishCore
 fm respond "..."  # try a prompt against the on-device model (macOS 27)
 ```
 
@@ -35,19 +38,20 @@ There is **no Xcode project**. The app is a SwiftPM executable (`Package.swift`,
 | `Package.swift` | App executable target `Polish` + `PolishTests` |
 | `App/Sources/` | SwiftUI/AppKit app: menu bar, later hotkey, text bridge, review panel |
 | `App/Info.plist`, `App/Polish.entitlements` | Literal values (no Xcode build variables). Bundle ID `com.jasmedia.polish` |
-| `Packages/PolishCore/` | UI-free engine: protector, chunker, rewriter, validator, differ. All model calls live here |
+| `Packages/PolishCore/` | UI-free engine: protector, chunker, rewriter, validator, differ. All model calls live here (`FoundationModelBackend`; tests use a scripted `RewriteModel`) |
+| `Packages/PolishCore/Sources/PolishCLI/` | `polish-cli`: golden-set harness (writes the same columns as `eval/run.py`) and one-off rewrites |
 | `eval/` | Python evaluation with `apple-fm-sdk` (uv project, macOS only) |
 | `golden/golden.jsonl` | Golden test set shared by Python and Swift evals; schema in `golden/README.md` |
-| `prompts/` | Versioned model instructions; `{tone}` and `{placeholders}` are template slots. `{placeholders}` gets the placeholder rule (naming each `⟦Tn⟧`, plus a keep-at-start line when the draft opens with a mention) only when the draft has placeholders; otherwise the model invents `⟦T1⟧`. Rule texts: `PLACEHOLDER_RULE`, `LEADING_RULE` in `eval/run.py` |
+| `prompts/` | Versioned model instructions; `{tone}` and `{placeholders}` are template slots. `{placeholders}` gets the placeholder rule (naming each `⟦Tn⟧`, plus a keep-at-start line when the draft opens with a placeholder) only when the draft has placeholders; otherwise the model invents `⟦T1⟧`. Rule texts: `PLACEHOLDER_RULE`, `LEADING_MENTION_RULE`, `LEADING_RULE` in `eval/run.py`, mirrored in `InstructionsBuilder` (PolishCore); `Prompt.v1` must equal `prompts/v1.txt` (a test checks) |
 | `scripts/` | `bundle.sh`, `run.sh`, `bootstrap.sh` |
 
 ## Rewrite pipeline (PolishCore)
 
 1. **Normalize** whitespace, keep list markers.
 2. **Protect** Slack tokens, mentions and personal-dictionary words → placeholders `⟦T1⟧`, `⟦T2⟧`… plus a map. Code blocks collapse to one placeholder. Record the draft's apostrophe style.
-3. **Budget** tokens with `SystemLanguageModel.tokenUsage(for:)` against `contextSize`; chunk on paragraph, then sentence boundaries if over ~70%.
+3. **Budget** tokens with `SystemLanguageModel.tokenCount(for:)` against `contextSize`: input budget = (0.7 × context − instructions − schema) / 2.6. Chunk on paragraph, then sentence boundaries (`NLTokenizer` plus end punctuation, since drafts often start sentences lowercase) when over it.
 4. **Generate** with a new `LanguageModelSession` per request, temperature 0.2, `maximumResponseTokens` capped (≈ input chars / 2 + 200). Guided generation into `RewriteWithMistakes { mistakes: [String] (max 10), text: String }`: listing mistakes first keeps the model from editing correct text; the list itself is not used.
-5. **Validate**: every placeholder exactly once, no merged or dropped lines (non-blank line count ≥ input's), length between −40% and +60% of the input (Concise: down to −60%), non-empty. On failure retry once at temperature 0, then return the original.
+5. **Validate**: every placeholder exactly once, no merged or dropped lines (non-blank line count ≥ input's), length between −40% and +60% of the input (Concise: down to −60%), non-empty. On failure retry once at temperature 0, then return the original (per chunk). A context overflow re-splits the chunk at half the budget once, then fails with `PolishError.tooLong`.
 6. **Restore**: put lines back into the draft's blank-line layout, undo expansions of contractions and `doc`/`config`/`repo` the draft used, convert quotes to the recorded style, restore placeholders, rejoin chunks, word-level diff for the panel.
 
 The model never sees raw Slack syntax. Placeholder integrity is enforced by validation, never trusted to the model.
@@ -66,6 +70,7 @@ The model never sees raw Slack syntax. Placeholder integrity is enforced by vali
 - Tests that call the real model must skip when it's unavailable (CI has no Apple Intelligence):
   `@Suite(.enabled(if: ModelStatus.current().isReady, "On-device model not available"))`
 - Keep PolishCore free of AppKit/SwiftUI so it stays testable from the CLI.
+- macOS 27 throws `LanguageModelError`; `PolishError(modelError:)` also maps the deprecated `LanguageModelSession.GenerationError` (hence one deprecation warning).
 - Prompt changes go in a new `prompts/vN.txt` and must be scored on the golden set before they ship (Phase 1 sets the bar: ≥ 99% placeholder integrity, ≥ 95% unchanged-when-correct).
 
 ## Gotchas

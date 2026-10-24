@@ -21,6 +21,7 @@ uv run --project eval jupyter lab                       # notebooks
 | `tokens.py` | Token cost of instructions, schema and inputs; chunking budget |
 | `analysis.ipynb` | Charts per variant and per tag, failure tables |
 | `inspect_pasteboard.swift` | Mention spike: prints what Slack puts on the clipboard (`swift eval/inspect_pasteboard.swift`, then ⌘C in Slack) |
+| `compare.py` | Scores Swift harness runs (`make eval-swift`) next to Python runs with `metrics.py`; Phase 2 parity check |
 | `RESULTS.md` | Scores of the prompt that ships |
 
 ```bash

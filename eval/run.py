@@ -28,15 +28,20 @@ TONES = {"keep": "keep the writer's tone"}
 PLACEHOLDER_RULE = "The message contains placeholders: {list}. Copy each one exactly once, unchanged, in a natural position."
 
 
-LEADING_RULE = "The message starts with ⟦T1⟧, which addresses someone: keep ⟦T1⟧ at the start."
+LEADING_MENTION_RULE = "The message starts with ⟦T1⟧, which addresses someone: keep ⟦T1⟧ at the start."
+LEADING_RULE = "The message starts with ⟦T1⟧: keep ⟦T1⟧ at the start."
 
 
-def build_instructions(template: str, tone: str, placeholders: int, leading_mention: bool = False) -> str:
+def build_instructions(template: str, tone: str, placeholders: int, leading_mention: bool = False,
+                       leading_token: bool = False) -> str:
     # Only mention placeholders when the draft has some (otherwise the model invents them), and name each one.
     names = ", ".join(f"⟦T{n}⟧" for n in range(1, placeholders + 1))
     rule = PLACEHOLDER_RULE.format(list=names) + "\n" if placeholders else ""
+    # The model's most common placeholder failure is dropping a leading addressee, emoji or bold label.
     if leading_mention:
-        rule += LEADING_RULE + "\n"  # the model's most common placeholder failure is dropping a leading addressee
+        rule += LEADING_MENTION_RULE + "\n"
+    elif leading_token:
+        rule += LEADING_RULE + "\n"
     return template.replace("{tone}", TONES[tone]).replace("{placeholders}\n", rule)
 
 
@@ -130,8 +135,9 @@ async def generate(model, instructions: str, prompt: str, schema, temperature: f
 async def polish_row(model, row: dict, template: str, tone: str, schema, keep_style: bool, temperature: float) -> dict:
     """The Phase 2 pipeline in miniature: protect, generate, validate, retry once at 0, restore."""
     protected = protect(row["input"])
-    leading_mention = protected.text.startswith("⟦T1⟧") and protected.tokens[0].startswith(("@", "<@"))
-    instructions = build_instructions(template, tone, len(protected.tokens), leading_mention)
+    leading = protected.text.startswith("⟦T1⟧")
+    leading_mention = leading and protected.tokens[0].startswith(("@", "<@"))
+    instructions = build_instructions(template, tone, len(protected.tokens), leading_mention, leading and not leading_mention)
     record = {"tokens": len(protected.tokens), "attempts": 0, "error": None, "raw": None, "problems": [], "final_problems": []}
     start = time.perf_counter()
     for temperature in (temperature, 0.0):

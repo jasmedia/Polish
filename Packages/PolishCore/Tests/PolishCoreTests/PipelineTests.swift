@@ -81,6 +81,12 @@ struct PipelineTests {
         #expect(result.text == "I'll post the doc.\n\nIt is \"ready\".")
     }
 
+    @Test func otherTonesKeepWrittenOutContractions() async throws {
+        let model = ScriptedModel([.text("I will post the doc.\nIt is “ready”.")])
+        let result = try await Pipeline(model: model).polish(text: "i'll post the doc\n\nits 'ready'", tone: .professional)
+        #expect(result.text == "I will post the doc.\n\nIt is \"ready\".")
+    }
+
     @Test func unchangedDraftComesBackByteForByte() async throws {
         let draft = "Thanks, I'll take a look.   \r\nSee you."
         let model = ScriptedModel([.echo { $0 }])

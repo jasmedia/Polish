@@ -22,6 +22,7 @@ uv run --project eval jupyter lab                       # notebooks
 | `analysis.ipynb` | Charts per variant and per tag, failure tables |
 | `inspect_pasteboard.swift` | Mention spike: prints what Slack puts on the clipboard (`swift eval/inspect_pasteboard.swift`, then ⌘C in Slack) |
 | `compare.py` | Scores Swift harness runs (`make eval-swift`) next to Python runs with `metrics.py`; Phase 2 parity check |
+| `tones.py` | Scores `polish-cli golden --tone` runs per tone against the Keep run (change vs keep, length, contractions) |
 | `RESULTS.md` | Scores of the prompt that ships |
 
 ```bash

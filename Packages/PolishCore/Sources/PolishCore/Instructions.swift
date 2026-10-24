@@ -20,10 +20,36 @@ public enum Tone: String, CaseIterable, Sendable {
 
 /// Builds the model instructions for one request from a versioned prompt template.
 public struct InstructionsBuilder: Sendable {
+    /// Keep my tone: correct in place and leave correct text alone.
     public var template: String
+    /// The other tones restyle the whole message, so they use their own template when one is given.
+    public var restyle: Restyle?
 
-    public init(template: String = Prompt.v1) {
+    /// A template for Casual, Professional and Concise, and the text for its `{tone}` slot per tone.
+    public struct Restyle: Sendable {
+        public var template: String
+        public var tones: [Tone: String]
+
+        public init(template: String, tones: [Tone: String]) {
+            self.template = template
+            self.tones = tones
+        }
+
+        /// `prompts/vN.txt` plus one `{tone}` text per tone in `prompts/vN-tones/<tone>.txt`.
+        public init(contentsOf url: URL) throws {
+            let directory = URL(filePath: url.deletingPathExtension().path() + "-tones")
+            var tones: [Tone: String] = [:]
+            for tone in Tone.allCases where tone != .keep {
+                let text = try String(contentsOf: directory.appending(path: "\(tone.rawValue).txt"), encoding: .utf8)
+                tones[tone] = text.trimmingCharacters(in: .newlines)
+            }
+            self.init(template: try String(contentsOf: url, encoding: .utf8), tones: tones)
+        }
+    }
+
+    public init(template: String = Prompt.v1, restyle: Restyle? = nil) {
         self.template = template
+        self.restyle = restyle
     }
 
     static let placeholderRule = "The message contains placeholders: {list}. Copy each one exactly once, unchanged, in a natural position."
@@ -56,8 +82,14 @@ public struct InstructionsBuilder: Sendable {
             let template = leading.isMention ? Self.leadingMentionRule : Self.leadingRule
             rule += template.replacingOccurrences(of: "{name}", with: Placeholder.name(leading.number)) + "\n"
         }
+        var template = template
+        var toneText = tone.instruction
+        if tone != .keep, let restyle {
+            template = restyle.template
+            toneText = restyle.tones[tone] ?? toneText
+        }
         return template
-            .replacingOccurrences(of: "{tone}", with: tone.instruction)
+            .replacingOccurrences(of: "{tone}", with: toneText)
             .replacingOccurrences(of: "{placeholders}\n", with: rule)
     }
 }

@@ -188,7 +188,9 @@ public final class Pipeline: Sendable {
             attempts.append(.init(temperature: temperature, raw: response.text, mistakes: response.mistakes,
                                   failures: failures, usage: response.usage))
             if failures.isEmpty {
-                let text = Restorer.apply(response.text, source: source, keepWriterStyle: configuration.keepWriterStyle)
+                // Other tones change contractions on purpose (Professional writes them out), so only Keep undoes that.
+                let keepStyle = configuration.keepWriterStyle && tone == .keep
+                let text = Restorer.apply(response.text, source: source, keepWriterStyle: keepStyle)
                 return Rewritten(text: text, changes: response.changes, fallbacks: [],
                                  trace: .init(attempts: attempts, rechunked: false))
             }

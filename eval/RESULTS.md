@@ -145,3 +145,46 @@ Conclusions:
 make eval-swift
 uv run --project eval python eval/compare.py --swift eval/runs/<swift>.jsonl --python eval/runs/<python>.parquet
 ```
+
+# Phase 4: tones (prompt v2, in progress)
+
+Keep my tone stays on `prompts/v1.txt`. Prompt v2 is a separate restyle template for Casual, Professional and Concise: `prompts/v2.txt` plus one `{tone}` text per tone in `prompts/v2-tones/`. `InstructionsBuilder.Restyle` loads it; the app still uses v1 for every tone. Other tones also skip the writer-style restore, which would undo Professional's written-out contractions. Scored 2026-10-25 on the 210-row golden set through the Swift pipeline (`polish-cli golden --tone T --tone-prompt prompts/v2.txt`), with `eval/tones.py`.
+
+The golden `expected` values are written in the default tone, so the other tones are measured against the Keep run: how far they move from it (`change_vs_keep`, word edit rate) and in which direction.
+
+| Metric | v1 keep | v1 casual | v1 prof. | v1 concise | v2b casual | v2b prof. | v2b concise |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Placeholder integrity, first attempt | 100% | 95.3% | 98.8% | 97.7% | 100% | 96.5% | 95.3% |
+| Fallbacks (of 210) | 5 | 8 | 8 | 8 | 16 | 13 | 25 |
+| Change vs keep (word edit rate) | | 0.06 | 0.06 | 0.04 | 0.14 | 0.17 | 0.35 |
+| Contractions per 100 words | 1.47 | 1.72 | 1.33 | 1.39 | 1.76 | 0.24 | 0.31 |
+| Length ratio, inputs ≥ 20 words | 1.05 | 1.04 | 1.05 | 1.04 | 1.03 | 1.05 | 0.91 |
+| Rows ≥ 10% shorter than keep | | 2% | 1% | 1% | 5% | 4% | 51% |
+| Correct rows changed | 6% | 8% | 8% | 6% | 29% | 52% | 75% |
+| p90 latency, inputs ≤ 60 words | 1.71 s | 1.74 s | 2.26 s | 2.22 s | 2.22 s | 2.12 s | 2.61 s |
+
+**v1 tones are cosmetic:** each moves 4–6% of words from Keep, about run-to-run noise. v2 makes Professional and Concise clearly different (contractions down 80%, Concise half the rows shorter) and Casual somewhat different.
+
+**Meaning check** (15 changed rows per tone from v2b, seed 7, read in the development session):
+
+| Tone | Meaning kept | Failures |
+| --- | --- | --- |
+| Casual | 12 / 15 | Requests flipped into offers: "please let me know your availability" → "I'll let you know my availability", "could you share" → "I can't share", "pls find" → "I'll find". Likely primed by the "I'll" contraction example |
+| Professional | 15 / 15 | Still under-corrects (`more cleaner`, an all-lowercase draft left as is); one dropped "please" |
+| Concise | 11 / 15 | "I didn't receive" → "You did not receive"; a question became a statement; two requests became bare orders; telegraphic notes despite the full-sentences rule |
+
+**Not shippable yet.** Open problems, in order:
+
+1. **Meaning flips** in Casual and Concise (pronouns, requests, questions). Every one breaks the "meaning never changes" rule. Next: drop the contraction examples that prime "I'll", and test a two-stage design that restyles the Keep result, so the restyle step sees correct text and only changes tone (Tab would then cost one call when the default is Keep).
+2. **Merged lines** cause most fallbacks (11–22 per tone; v1 keep has 5). The "keep every line" rule didn't help. Next: rewrite multi-line drafts per paragraph for the restyle tones.
+3. **Placeholder integrity** is below the 99% bar for Professional and Concise (dropped mentions).
+
+| Draft | Change | Result |
+| --- | --- | --- |
+| v2a | v1's rules minus "leave correct sentences alone", tone line at the end | Professional stiff and long (18 length fallbacks: "Please determine whether…"), "merge" → "deploy" from the keep-words list |
+| v2b (current files) | Tone first; technical terms kept as written; no added requests or nicknames; questions stay questions; Professional "clear, not formal" | Professional fallbacks 26 → 13, length rejects 18 → 2; meaning flips remain in Casual and Concise |
+
+```bash
+swift run -c release --package-path Packages/PolishCore polish-cli golden --tone casual --tone-prompt prompts/v2.txt
+uv run --project eval python eval/tones.py eval/runs/tones-*.jsonl
+```

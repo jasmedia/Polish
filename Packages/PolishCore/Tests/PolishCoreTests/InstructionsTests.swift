@@ -38,4 +38,19 @@ struct InstructionsTests {
     func everyToneFillsTheSlot(tone: Tone) {
         #expect(!InstructionsBuilder().build(tone: tone, placeholders: []).contains("{tone}"))
     }
+
+    @Test func restyleTemplateIsForTheOtherTonesOnly() {
+        let restyle = InstructionsBuilder.Restyle(template: "Restyle. {tone}\n{placeholders}\n", tones: [.casual: "Tone: chatty."])
+        let builder = InstructionsBuilder(restyle: restyle)
+        #expect(builder.build(tone: .keep, placeholders: []) == InstructionsBuilder().build(tone: .keep, placeholders: []))
+        #expect(builder.build(tone: .casual, placeholders: []) == "Restyle. Tone: chatty.\n")
+        #expect(builder.build(tone: .concise, placeholders: [1]).hasPrefix("Restyle. concise: cut filler"))
+    }
+
+    @Test func loadsAPromptVersionWithItsToneTexts() throws {
+        let restyle = try InstructionsBuilder.Restyle(contentsOf: Golden.repoRoot.appending(path: "prompts/v2.txt"))
+        #expect(restyle.template.contains("{tone}"))
+        #expect(Set(restyle.tones.keys) == [.casual, .professional, .concise])
+        #expect(restyle.tones.values.allSatisfy { $0.hasPrefix("Tone: ") && !$0.hasSuffix("\n") })
+    }
 }

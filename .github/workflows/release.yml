@@ -17,8 +17,7 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: release
@@ -28,19 +27,25 @@ jobs:
   release:
     name: Build and publish
     runs-on: xcode-27
+    # Pushes the version bump and the tag, and creates the release.
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           # A run from the button bumps the version on main, so it needs main itself.
           ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
 
       - name: Bump the version
         if: github.event_name == 'workflow_dispatch'
+        # Inputs go through env, never inlined into the script.
+        env:
+          BUMP: ${{ inputs.bump }}
         run: |
-          if [[ '${{ inputs.bump }}' == current ]]; then
+          if [[ "${BUMP}" == current ]]; then
             version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)"
           else
-            version="$(scripts/bump-version.sh '${{ inputs.bump }}')"
+            version="$(scripts/bump-version.sh "${BUMP}")"
           fi
           echo "TAG=v${version}" >> "$GITHUB_ENV"
 
@@ -57,7 +62,7 @@ jobs:
       - name: Check the tag is new
         run: |
           git fetch --tags --quiet
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] &&git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
             echo "::error::Tag ${TAG} already exists"
             exit 1
           fi

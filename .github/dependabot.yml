@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions in .github/workflows current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: swift
+    directories: [/, /Packages/PolishCore]
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: uv
+    directory: /eval
+    schedule:
+      interval: monthly

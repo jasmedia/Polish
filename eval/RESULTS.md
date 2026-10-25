@@ -260,7 +260,18 @@ Split rows still take 7–15 calls and 870–2,400 output tokens: a split long d
 
 **Progress in the panel:** `Pipeline.polish(progress:)` reports finished parts out of a total that grows when a part is split; the review panel shows "Polishing… part 2 of 5" with a bar when a draft has more than one part.
 
-**Next for speed:** stream the rewrite into the panel as it is generated (perceived latency), and a tighter response cap so a looping first attempt fails sooner.
+**Streaming:** the panel now shows the rewrite as the model writes it (`RewriteModel.generate(_:partialText:)` on `streamResponse`, `Pipeline.polish(preview:)`), dimmed until the checked result and diff replace it. The schema writes `mistakes` before `text`, so text starts once the list is done. Keep my tone, `polish-cli rewrite --stream`, 2026-10-25:
+
+| Draft | Plain call, total | Streaming, first text | Streaming, total |
+| --- | --- | --- | --- |
+| `long-002` (258 words) | 9.81 s | 2.04 s | 8.95 s |
+| `long-006` (266 words) | 8.31 s | 1.51 s | 8.33 s |
+| `long-009` (251 words) | 8.22 s | 1.44 s | 7.74 s |
+| `sent-025` (63 words) | 2.69 s | 1.54 s | 2.77 s |
+
+Streaming costs nothing measurable, and long drafts show text after 1.4–2.0 s instead of a spinner for 8–10 s. Total time is unchanged, so the ≤ 8 s p90 target for 300 words is still missed by about a second on one call; split restyle drafts remain 2–3× slower.
+
+**Next for speed:** a tighter response cap so a looping first attempt (`long-004`, 874 tokens) fails sooner.
 
 ```bash
 swift run -c release --package-path Packages/PolishCore polish-cli golden --tone casual --tone-prompt prompts/v2.txt

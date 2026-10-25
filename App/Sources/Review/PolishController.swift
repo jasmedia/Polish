@@ -129,9 +129,11 @@ final class PolishController {
         review.state = .loading
         let run = review.startRun()
         do {
-            let result = try await pipeline.polish(text: text, tone: review.tone) { progress in
+            let result = try await pipeline.polish(text: text, tone: review.tone, progress: { progress in
                 Task { @MainActor in review.update(progress, run: run) }
-            }
+            }, preview: { text in
+                Task { @MainActor in review.updatePreview(text, run: run) }
+            })
             guard !Task.isCancelled, self.review === review else { return }
             logResultTime(since: pressed)
             if result.isUnchanged {

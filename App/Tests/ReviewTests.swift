@@ -77,4 +77,17 @@ struct ReviewTests {
         review.update(PolishProgress(completed: 0, total: 1), run: second)
         #expect(review.progress == PolishProgress(completed: 0, total: 1))
     }
+
+    @Test func previewIsClearedAndTiedToItsRun() {
+        let review = ReviewModel()
+        let first = review.startRun()
+        review.updatePreview("I will send", run: first)
+        #expect(review.preview == "I will send")
+        let second = review.startRun()
+        #expect(review.preview == nil)
+        review.updatePreview("I will send the report", run: first)
+        #expect(review.preview == nil)
+        review.updatePreview("Hey, I'll", run: second)
+        #expect(review.preview == "Hey, I'll")
+    }
 }

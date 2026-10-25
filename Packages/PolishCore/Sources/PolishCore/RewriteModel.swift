@@ -51,6 +51,16 @@ public protocol RewriteModel: Sendable {
     /// Loads the model ahead of a request (called when the hotkey is pressed).
     func prewarm(instructions: String)
     func generate(_ request: GenerationRequest) async throws -> GenerationResponse
+    /// Like `generate(_:)`, calling `partialText` with the rewrite so far as the model writes it, so the
+    /// panel can show it before the result is validated (FR-12).
+    func generate(_ request: GenerationRequest, partialText: @escaping @Sendable (String) -> Void) async throws -> GenerationResponse
+}
+
+extension RewriteModel {
+    /// Models that can't stream return the whole response at once.
+    public func generate(_ request: GenerationRequest, partialText: @escaping @Sendable (String) -> Void) async throws -> GenerationResponse {
+        try await generate(request)
+    }
 }
 
 /// The on-device Apple Foundation Model. A new `LanguageModelSession` per request, so no transcript builds up.
@@ -83,6 +93,33 @@ public final class FoundationModelBackend: RewriteModel {
     }
 
     public func generate(_ request: GenerationRequest) async throws -> GenerationResponse {
+        let (session, options) = start(request)
+        if request.withChanges {
+            return GenerationResponse(try await session.respond(to: request.prompt, generating: RewriteWithChanges.self,
+                                                                options: options))
+        }
+        return GenerationResponse(try await session.respond(to: request.prompt, generating: RewriteWithMistakes.self,
+                                                            options: options))
+    }
+
+    public func generate(_ request: GenerationRequest, partialText: @escaping @Sendable (String) -> Void) async throws -> GenerationResponse {
+        let (session, options) = start(request)
+        // The schema puts `mistakes` first, so text arrives only once the list is written.
+        if request.withChanges {
+            let stream = session.streamResponse(to: request.prompt, generating: RewriteWithChanges.self, options: options)
+            for try await snapshot in stream {
+                if let text = snapshot.content.text { partialText(text) }
+            }
+            return GenerationResponse(try await stream.collect())
+        }
+        let stream = session.streamResponse(to: request.prompt, generating: RewriteWithMistakes.self, options: options)
+        for try await snapshot in stream {
+            if let text = snapshot.content.text { partialText(text) }
+        }
+        return GenerationResponse(try await stream.collect())
+    }
+
+    private func start(_ request: GenerationRequest) -> (LanguageModelSession, GenerationOptions) {
         warmSession.withLock { $0 = nil }
         let session = LanguageModelSession(model: model, instructions: request.instructions)
         let options = GenerationOptions(
@@ -90,14 +127,18 @@ public final class FoundationModelBackend: RewriteModel {
             // Cap the response so a looping generation fails fast instead of filling the context.
             maximumResponseTokens: request.maximumResponseTokens
         )
-        if request.withChanges {
-            let result = try await session.respond(to: request.prompt, generating: RewriteWithChanges.self, options: options)
-            let changes = result.content.changes.map { Change(from: $0.from, to: $0.to, reason: $0.reason) }
-            return GenerationResponse(text: result.content.text, mistakes: result.content.mistakes, changes: changes,
-                                      usage: TokenUsage(result.usage))
-        }
-        let result = try await session.respond(to: request.prompt, generating: RewriteWithMistakes.self, options: options)
-        return GenerationResponse(text: result.content.text, mistakes: result.content.mistakes, usage: TokenUsage(result.usage))
+        return (session, options)
+    }
+}
+
+extension GenerationResponse {
+    init(_ result: LanguageModelSession.Response<RewriteWithMistakes>) {
+        self.init(text: result.content.text, mistakes: result.content.mistakes, usage: TokenUsage(result.usage))
+    }
+
+    init(_ result: LanguageModelSession.Response<RewriteWithChanges>) {
+        let changes = result.content.changes.map { Change(from: $0.from, to: $0.to, reason: $0.reason) }
+        self.init(text: result.content.text, mistakes: result.content.mistakes, changes: changes, usage: TokenUsage(result.usage))
     }
 }
 

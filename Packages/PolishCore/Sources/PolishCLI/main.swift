@@ -5,12 +5,13 @@
 //   (--two-stage: polish in Keep my tone first, then restyle that result in TONE)
 //   (--tone-prompt: a prompts/vN.txt restyle template for the non-keep tones, with prompts/vN-tones/;
 //    default: what the app ships, v2 for Casual and Professional and v1 for the rest)
-//   polish-cli rewrite [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage] [TEXT]   (reads stdin without TEXT)
+//   polish-cli rewrite [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage] [--stream] [TEXT]   (reads stdin without TEXT)
 //
 // `golden` writes one JSON object per row with the same columns as eval/run.py, so eval/compare.py
 // can score Swift and Python runs with the same metrics.
 
 import Foundation
+import Synchronization
 import PolishCore
 
 struct Options {
@@ -24,6 +25,7 @@ struct Options {
     var tone = Tone.keep
     var tonePrompt: String?
     var twoStage = false
+    var stream = false
     var text: [String] = []
 }
 
@@ -54,6 +56,7 @@ func parse(_ arguments: [String]) -> Options {
             options.tone = tone
         case "--tone-prompt": options.tonePrompt = value(argument)
         case "--two-stage": options.twoStage = true
+        case "--stream": options.stream = true
         case "--ids":
             while let id = rest.first, !id.hasPrefix("--") {
                 options.ids.append(id)
@@ -201,7 +204,18 @@ func runRewrite(_ options: Options) async throws {
         ? String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
         : options.text.joined(separator: " ")
     do {
-        let result = try await polish(text, with: Pipeline(instructions: instructions), options)
+        let pipeline = Pipeline(instructions: instructions)
+        let start = ContinuousClock.now
+        let firstText = Mutex<Duration?>(nil)
+        let result = options.stream
+            ? try await pipeline.polish(text: text, tone: options.tone, preview: { partial in
+                if !partial.isEmpty { firstText.withLock { $0 = $0 ?? (.now - start) } }
+            })
+            : try await polish(text, with: pipeline, options)
+        if options.stream {
+            let first = firstText.withLock { $0 }.map { String(format: "%.2f s", $0.seconds) } ?? "none"
+            FileHandle.standardError.write(Data("(first text after \(first), done after \(String(format: "%.2f s", (ContinuousClock.now - start).seconds)))\n".utf8))
+        }
         print(result.text)
         if result.didFallBack {
             let reasons = result.fallbacks.flatMap { $0 }.map(\.description).joined(separator: ", ")
@@ -220,7 +234,7 @@ default:
     print("""
         usage: polish-cli golden [--golden PATH] [--out PATH] [--limit N] [--ids ID...] [--temperature T] [--no-keep-style]
                                  [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage]
-               polish-cli rewrite [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage] [TEXT]
+               polish-cli rewrite [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage] [--stream] [TEXT]
         """)
 }
 

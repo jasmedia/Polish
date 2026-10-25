@@ -53,6 +53,19 @@ struct ReviewView: View {
                     ProgressView(value: Double(progress.completed), total: Double(progress.total))
                         .accessibilityHidden(true)
                 }
+                if let preview = model.preview, !preview.isEmpty {
+                    // The rewrite as the model writes it, before it's checked; the diff replaces it.
+                    ScrollView {
+                        Text(preview)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxHeight: 240)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .defaultScrollAnchor(.bottom)
+                    .accessibilityHidden(true)
+                }
             }
             .accessibilityElement(children: .combine)
         case .unchanged:

@@ -37,6 +37,14 @@ final class ScriptedModel: RewriteModel {
         case .fail(let error): throw error
         }
     }
+
+    /// Streams each reply in two pieces: up to its middle, then whole.
+    func generate(_ request: GenerationRequest, partialText: @escaping @Sendable (String) -> Void) async throws -> GenerationResponse {
+        let response = try await generate(request)
+        partialText(String(response.text.prefix(response.text.count / 2)))
+        partialText(response.text)
+        return response
+    }
 }
 
 struct PipelineTests {
@@ -121,6 +129,23 @@ struct PipelineTests {
         }
         // One part until the merge, then the two paragraphs with words.
         #expect(events.withLock { $0 }.map { [$0.completed, $0.total] } == [[0, 1], [0, 2], [1, 2], [2, 2]])
+    }
+
+    @Test func previewStreamsTheRewriteWithPlaceholdersRestored() async throws {
+        let model = ScriptedModel([.text("⟦T1⟧, I will send you the report tomorrow.")])
+        let previews = Mutex<[String]>([])
+        _ = try await Pipeline(model: model).polish(text: "<@U1> i will send u the report tmrw", preview: { text in
+            previews.withLock { $0.append(text) }
+        })
+        let seen = previews.withLock { $0 }
+        #expect(seen.last == "<@U1>, I will send you the report tomorrow.")
+        #expect(seen.count == 2)
+        #expect(seen.allSatisfy { !$0.contains("⟦") })
+    }
+
+    @Test(arguments: [("Hi ⟦T", "Hi "), ("Hi ⟦T12", "Hi "), ("Hi ⟦T1⟧ there", "Hi ⟦T1⟧ there"), ("⟦T1⟧ and ⟦", "⟦T1⟧ and ")])
+    func displayableHidesAHalfWrittenPlaceholder(partial: String, shown: String) {
+        #expect(Pipeline.displayable(partial) == shown)
     }
 
     @Test func shortDraftIsOnePart() async throws {

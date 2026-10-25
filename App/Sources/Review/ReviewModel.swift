@@ -52,6 +52,8 @@ final class ReviewModel {
     var tone: Tone
     /// Parts of a long draft done so far (FR-12); nil until the pipeline reports.
     private(set) var progress: PolishProgress?
+    /// The part being written, as the model streams it; not validated, so shown dimmed while loading.
+    private(set) var preview: String?
     /// Counts polish runs (Tab starts a new one), so reports from a cancelled run are dropped.
     private var run = 0
     var showRemovals = false
@@ -67,6 +69,7 @@ final class ReviewModel {
     func startRun() -> Int {
         run += 1
         progress = nil
+        preview = nil
         return run
     }
 
@@ -75,6 +78,11 @@ final class ReviewModel {
         guard run == self.run else { return }
         if let current = self.progress, progress.completed < current.completed || progress.total < current.total { return }
         self.progress = progress
+    }
+
+    func updatePreview(_ text: String, run: Int) {
+        guard run == self.run else { return }
+        preview = text
     }
 
     /// What the loading state says: the part being worked on when the draft has more than one.

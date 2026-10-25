@@ -81,13 +81,17 @@ public final class Pipeline: Sendable {
         model.prewarm(instructions: instructions.build(tone: tone, placeholders: []))
     }
 
-    /// - Parameter progress: called as parts of a long draft finish, so the panel can show how far along it
-    ///   is (FR-12). A short draft is one part; the total grows when a part is split again.
+    /// - Parameters:
+    ///   - progress: called as parts of a long draft finish, so the panel can show how far along it is
+    ///     (FR-12). A short draft is one part; the total grows when a part is split again.
+    ///   - preview: called with the part being written so far, placeholders restored, as the model streams
+    ///     it. Not validated yet: for display while loading only. Without it the model doesn't stream.
     public func polish(
         text original: String,
         tone: Tone = .keep,
         withChanges: Bool = false,
-        progress: (@Sendable (PolishProgress) -> Void)? = nil
+        progress: (@Sendable (PolishProgress) -> Void)? = nil,
+        preview: (@Sendable (String) -> Void)? = nil
     ) async throws -> PolishResult {
         let clock = ContinuousClock()
         let start = clock.now
@@ -115,7 +119,7 @@ public final class Pipeline: Sendable {
         var changes: [Change] = []
         var fallbacks: [[ValidationFailure]] = []
         var traces: [PolishResult.ChunkTrace] = []
-        let tracker = ProgressTracker(total: chunks.count, report: progress)
+        let tracker = ProgressTracker(total: chunks.count, report: progress, preview: preview)
         for chunk in chunks {
             try Task.checkCancellation()
             let rewritten = try await rewrite(chunk.text, protected: protected, tone: tone, withChanges: withChanges,
@@ -184,7 +188,13 @@ public final class Pipeline: Sendable {
             let response: GenerationResponse
             let generationStart = ContinuousClock.now
             do {
-                response = try await model.generate(attempt)
+                if let preview = progress.preview {
+                    response = try await model.generate(attempt) { partial in
+                        preview(Self.displayable(protected.restore(partial)))
+                    }
+                } else {
+                    response = try await model.generate(attempt)
+                }
             } catch {
                 guard let polishError = PolishError(modelError: error) else { throw error }
                 Log.engine.error("Generation failed: \(polishError.code, privacy: .public)")
@@ -293,6 +303,12 @@ public final class Pipeline: Sendable {
         return result
     }
 
+    /// Streamed text can end inside a placeholder (`⟦T`); hide that until it's complete.
+    static func displayable(_ partial: String) -> String {
+        guard let open = partial.lastIndex(of: "⟦"), !partial[open...].contains("⟧") else { return partial }
+        return String(partial[..<open])
+    }
+
     /// Whether a piece has any words outside its placeholders.
     static func hasWords(_ text: String) -> Bool {
         Placeholder.pattern.replacing(in: text, with: "").contains(where: \.isLetter)
@@ -345,14 +361,16 @@ public struct PolishProgress: Equatable, Sendable {
     }
 }
 
-/// Counts finished parts for one polish and reports each change.
+/// Counts finished parts for one polish and reports each change; also carries the preview callback.
 final class ProgressTracker: Sendable {
     private let state: Mutex<PolishProgress>
     private let report: (@Sendable (PolishProgress) -> Void)?
+    let preview: (@Sendable (String) -> Void)?
 
-    init(total: Int, report: (@Sendable (PolishProgress) -> Void)?) {
+    init(total: Int, report: (@Sendable (PolishProgress) -> Void)?, preview: (@Sendable (String) -> Void)? = nil) {
         state = Mutex(PolishProgress(completed: 0, total: total))
         self.report = report
+        self.preview = preview
         report?(PolishProgress(completed: 0, total: total))
     }
 

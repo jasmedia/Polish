@@ -40,7 +40,7 @@ check-model: ## Smoke-test the on-device model via fm and the Python SDK
 icon: ## Redraw App/Resources/AppIcon.icns (scripts/make-icon.swift)
 	swift scripts/make-icon.swift
 
-release: ## Developer ID build, notarized and stapled, in a DMG (SKIP_NOTARIZE=1 to skip notarytool)
+release: ## DMG for a GitHub release, ad-hoc signed (NOTARIZE=1 for a notarized Developer ID build)
 	scripts/release.sh
 
 clean: ## Remove build products

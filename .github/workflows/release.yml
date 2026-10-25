@@ -1,0 +1,38 @@
+name: Release
+
+# Push a tag that matches App/Info.plist's version (git tag v1.1.0 && git push origin v1.1.0) to test,
+# build an ad-hoc signed DMG and publish it as a GitHub release. Not notarized: README › Install
+# explains the one-time Open Anyway step.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the tag matches the app version
+        run: |
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)"
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} doesn't match App/Info.plist version ${version}"
+            exit 1
+          fi
+      # On-device model tests skip themselves: Apple Intelligence isn't available on CI runners.
+      - name: Tests
+        run: make test
+      - name: Build the DMG (ad-hoc signed)
+        run: scripts/release.sh
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" .build/release-dist/* \
+            --title "Polish ${GITHUB_REF_NAME#v}" \
+            --notes-file .github/release-notes.md \
+            --generate-notes

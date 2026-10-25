@@ -36,8 +36,10 @@ shopt -u nullglob
 
 IDENTITY="${POLISH_SIGN_IDENTITY:-}"
 if [[ -z "$IDENTITY" ]]; then
+  # By SHA-1 fingerprint, not name: a renewed certificate leaves two identities with the same name,
+  # which codesign rejects as ambiguous.
   IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
-    | awk -F'"' '/Apple Development|Developer ID Application/ { print $2; exit }')"
+    | awk '/Apple Development|Developer ID Application/ { print $2; exit }')"
 fi
 if [[ -z "$IDENTITY" ]]; then
   echo "warning: no signing identity found; signing ad-hoc." >&2

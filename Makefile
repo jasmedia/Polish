@@ -37,8 +37,10 @@ check-model: ## Smoke-test the on-device model via fm and the Python SDK
 	fm respond "Reply with the single word: ready"
 	uv run --project eval python eval/check_model.py
 
-icon: ## Redraw App/Resources/AppIcon.icns (scripts/make-icon.swift)
+icon: ## Redraw App/Resources/AppIcon.icns and the README logo docs/icon.png (scripts/make-icon.swift)
 	swift scripts/make-icon.swift
+	sips -s format png App/Resources/AppIcon.icns --out docs/icon.png >/dev/null
+	sips -Z 256 docs/icon.png >/dev/null
 
 release: ## DMG for a GitHub release, ad-hoc signed (NOTARIZE=1 for a notarized Developer ID build)
 	scripts/release.sh

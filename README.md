@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="128" height="128" alt="Polish app icon"></p>
+
 # Polish
 
 On-device grammar fixer for macOS. Press a hotkey in Slack and your rough draft comes back with clean grammar and spelling, while @mentions, emoji, links and code stay untouched. Built in Swift on Apple's Foundation Models framework. Runs fully on device: no API keys, nothing leaves your Mac.

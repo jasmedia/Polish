@@ -59,11 +59,15 @@ The app is a SwiftPM executable that `scripts/bundle.sh` wraps into a signed `.a
 
 ## Releases
 
-Push a tag that matches the version in `App/Info.plist`, and the Release workflow tests, builds an ad-hoc signed DMG with `scripts/release.sh` and publishes it:
+In GitHub, open **Actions › Release › Run workflow** and pick the version part to bump: **patch** (1.1.0 → 1.1.1), **minor** (→ 1.2.0) or **major** (→ 2.0.0), or **current** to release the version already in `App/Info.plist`. The workflow bumps the version on `main`, runs the tests, builds an ad-hoc signed DMG with `scripts/release.sh`, then commits `Release vX.Y.Z`, tags it and publishes the release. If the tests or build fail, nothing is committed or tagged.
+
+Pushing a tag that matches the version in `App/Info.plist` publishes that version too:
 
 ```bash
 git tag v1.1.0 && git push origin v1.1.0
 ```
+
+`scripts/bump-version.sh patch|minor|major` makes the same version bump locally.
 
 `make release` builds the same DMG locally in `.build/release-dist/`. With a paid Apple Developer account, `NOTARIZE=1 make release` signs with Developer ID and notarizes instead (setup steps at the top of `scripts/release.sh`).
 

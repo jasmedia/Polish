@@ -1,14 +1,28 @@
 name: Release
 
-# Push a tag that matches App/Info.plist's version (git tag v1.1.0 && git push origin v1.1.0) to test,
-# build an ad-hoc signed DMG and publish it as a GitHub release. Not notarized: README › Install
-# explains the one-time Open Anyway step.
+# Two ways to publish an ad-hoc signed DMG as a GitHub release (not notarized: README › Install
+# explains the one-time Open Anyway step):
+#   - Actions › Release › Run workflow, picking patch, minor or major: bumps App/Info.plist on main,
+#     builds and tests, then commits "Release vX.Y.Z", tags it and publishes. "current" releases the
+#     version already in App/Info.plist without a bump (for the first release of a version set by hand).
+#   - Pushing a tag that matches App/Info.plist's version (git tag v1.1.0 && git push origin v1.1.0).
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to bump
+        type: choice
+        options: [patch, minor, major, current]
+        default: patch
   push:
     tags: ["v*"]
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -16,23 +30,63 @@ jobs:
     runs-on: xcode-27
     steps:
       - uses: actions/checkout@v5
+        with:
+          # A run from the button bumps the version on main, so it needs main itself.
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+
+      - name: Bump the version
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ '${{ inputs.bump }}' == current ]]; then
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)"
+          else
+            version="$(scripts/bump-version.sh '${{ inputs.bump }}')"
+          fi
+          echo "TAG=v${version}" >> "$GITHUB_ENV"
+
       - name: Check the tag matches the app version
+        if: github.event_name == 'push'
         run: |
           version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' App/Info.plist)"
           if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
             echo "::error::Tag ${GITHUB_REF_NAME} doesn't match App/Info.plist version ${version}"
             exit 1
           fi
+          echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+
+      - name: Check the tag is new
+        run: |
+          git fetch --tags --quiet
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
       # On-device model tests skip themselves: Apple Intelligence isn't available on CI runners.
       - name: Tests
         run: make test
+
       - name: Build the DMG (ad-hoc signed)
         run: scripts/release.sh
+
+      # Only after the build passed, so a failed run leaves main and the tags as they were.
+      - name: Commit and tag the version bump
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet App/Info.plist; then
+            git commit -m "Release ${TAG}" App/Info.plist
+            git push origin HEAD:main
+          fi
+          git tag "${TAG}"
+          git push origin "${TAG}"
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" .build/release-dist/* \
-            --title "Polish ${GITHUB_REF_NAME#v}" \
+          gh release create "${TAG}" .build/release-dist/* \
+            --title "Polish ${TAG#v}" \
             --notes-file .github/release-notes.md \
             --generate-notes

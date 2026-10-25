@@ -45,7 +45,7 @@ There is **no Xcode project**. The app is a SwiftPM executable (`Package.swift`,
 | `eval/` | Python evaluation with `apple-fm-sdk` (uv project, macOS only) |
 | `golden/golden.jsonl` | Golden test set shared by Python and Swift evals; schema in `golden/README.md` |
 | `prompts/` | Versioned model instructions; `{tone}` and `{placeholders}` are template slots. `{placeholders}` gets the placeholder rule (naming each `⟦Tn⟧`, plus a keep-at-start line when the draft opens with a placeholder) only when the draft has placeholders; otherwise the model invents `⟦T1⟧`. Rule texts: `PLACEHOLDER_RULE`, `LEADING_MENTION_RULE`, `LEADING_RULE` in `eval/run.py`, mirrored in `InstructionsBuilder` (PolishCore); `Prompt.v1` must equal `prompts/v1.txt` and `Prompt.v2` the v2 files (tests check) |
-| `scripts/` | `bundle.sh`, `run.sh`, `bootstrap.sh`, `release.sh` (release DMG), `make-icon.swift` (draws the app icon; the `.icns` in `App/Resources` is committed) |
+| `scripts/` | `bundle.sh`, `run.sh`, `bootstrap.sh`, `release.sh` (release DMG), `bump-version.sh`, `make-icon.swift` (draws the app icon; the `.icns` in `App/Resources` is committed) |
 
 ## Rewrite pipeline (PolishCore)
 
@@ -79,7 +79,7 @@ The model never sees raw Slack syntax. Placeholder integrity is enforced by vali
 
 - **Accessibility permission is tied to the code signature.** `bundle.sh` signs with the first Apple Development / Developer ID identity in the keychain (or `$POLISH_SIGN_IDENTITY`). Ad-hoc signing works but makes macOS forget the permission on every rebuild.
 - **Not sandboxed by design**: cross-app Accessibility and synthetic ⌘A/⌘C/⌘V need it off. Not on the App Store.
-- **Releases are ad-hoc signed and not notarized** (no paid developer account, decided 2026-10-25). Pushing a tag `vX.Y.Z` that matches `CFBundleShortVersionString` runs `.github/workflows/release.yml`, which publishes the DMG from `scripts/release.sh` with `.github/release-notes.md`. Users allow the first launch once (Open Anyway) and re-allow Accessibility after each update; README › Install says so. Never ship a build signed with the Apple Development identity. `NOTARIZE=1` is ready if the account is ever paid.
+- **Releases are ad-hoc signed and not notarized** (no paid developer account, decided 2026-10-25). Actions › Release › Run workflow (patch / minor / major via `scripts/bump-version.sh`, or current) bumps `App/Info.plist` on main, then tags and publishes; pushing a tag `vX.Y.Z` that matches `CFBundleShortVersionString` does the same without a bump. `.github/workflows/release.yml` publishes the DMG from `scripts/release.sh` with `.github/release-notes.md`. Users allow the first launch once (Open Anyway) and re-allow Accessibility after each update; README › Install says so. Never ship a build signed with the Apple Development identity. `NOTARIZE=1` is ready if the account is ever paid.
 - `LSUIElement = YES`: no Dock icon or main window. UI is `MenuBarExtra`, a non-activating `NSPanel`, and a `Settings` scene.
 - SwiftPM resource bundles from dependencies (e.g. KeyboardShortcuts in Phase 3) are copied into `Contents/Resources` by `bundle.sh`. Check `Bundle.module` loads after adding a package with resources.
 - `apple-fm-sdk` builds against FoundationModels.framework and needs Xcode installed; `eval/pyproject.toml` restricts uv resolution to macOS.

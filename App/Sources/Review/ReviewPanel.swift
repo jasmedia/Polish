@@ -34,6 +34,9 @@ final class ReviewPanel: NSPanel {
 
     /// Grows and shrinks downward from the top edge as the content changes (loading → result).
     private func fit(_ size: CGSize) {
+        // Whole points: on a 1x screen AppKit rounds a fractional origin and height separately,
+        // which moves the top edge.
+        let size = CGSize(width: size.width.rounded(.up), height: size.height.rounded(.up))
         DispatchQueue.main.async { [weak self] in
             guard let self, size.width > 0, size.height > 0, size != frame.size else { return }
             setFrame(NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height),

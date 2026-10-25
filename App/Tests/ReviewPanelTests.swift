@@ -29,7 +29,7 @@ struct ReviewPanelTests {
         }
 
         #expect(panel.frame.height > loadingHeight)
-        #expect(panel.frame.maxY == top)
+        #expect(panel.frame.maxY == top, "frame \(panel.frame), top \(top), scale \(panel.backingScaleFactor)")
         panel.orderOut(nil)
     }
 }

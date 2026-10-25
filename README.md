@@ -27,10 +27,10 @@ You can also build Polish yourself (see [Build from source](#build-from-source))
 
 ## Use
 
-- **⌃⌥G** in Slack (or any text field): Polish reads your draft and shows the rewrite in a panel under the caret, changes highlighted. **Return** puts it back, **⌘E** edits it first, **⌘C** copies it, **Tab** tries the next tone, **Esc** leaves your text as it was.
+- **⌃⌥G** in Slack: Polish reads your draft and shows the rewrite in a panel under the caret, changes highlighted. **Return** puts it back, **⌘E** edits it first, **⌘C** copies it, **Tab** tries the next tone, **Esc** leaves your text as it was. The shortcut works only in Slack until you add other apps (or turn on every app) in **Settings › Privacy**.
 - **⌃⌥⇧G** or **Quick Polish…** in the menu bar: a window to type or paste text, polish it and copy the result.
 - **Services › Polish Text** in any app's menu, with text selected.
-- **Settings:** default tone (Keep my tone, Casual, Professional, Concise), shortcuts, a list of changes with a reason for each fix, and a personal dictionary of names and words Polish never changes.
+- **Settings:** default tone (Keep my tone, Casual, Professional, Concise), shortcuts, a list of changes with a reason for each fix, a personal dictionary of names and words Polish never changes, the apps the shortcut works in, and an optional history of your last 50 rewrites.
 
 ## Build from source
 
@@ -85,7 +85,7 @@ CI runs both on GitHub's `xcode-27` runners. The on-device model is not availabl
 
 ## Privacy
 
-Polish uses only the on-device `SystemLanguageModel`. It makes no network calls, keeps no copy of your messages, and logs message text only as private. The app has no network entitlement.
+Polish uses only the on-device `SystemLanguageModel`. It makes no network calls, keeps no copy of your messages unless you turn on history (the last 50 rewrites, in a JSON file in Application Support that only your user can read; turning it off or **Clear History** deletes it), and logs message text only as private. The app has no network entitlement.
 
 ## License
 

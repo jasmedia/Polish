@@ -26,15 +26,21 @@ final class QuickWindowModel {
     @ObservationIgnored private let pipeline: Pipeline
     @ObservationIgnored private let copy: (String) -> Void
     @ObservationIgnored private let showChanges: @MainActor () -> Bool
+    /// Called with the original, the rewrite and its tone on each copy, for the history (FR-14).
+    @ObservationIgnored private let record: @MainActor (String, String, Tone) -> Void
+    /// The text and tone the shown result was polished from.
+    @ObservationIgnored private var polished: (text: String, tone: Tone)?
     /// The running polish. Internal so tests can await it.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored private var run = 0
 
     init(pipeline: Pipeline, tone: Tone, showChanges: @escaping @MainActor () -> Bool = { false },
+         record: @escaping @MainActor (String, String, Tone) -> Void = { _, _, _ in },
          copy: @escaping (String) -> Void) {
         self.pipeline = pipeline
         self.tone = tone
         self.showChanges = showChanges
+        self.record = record
         self.copy = copy
     }
 
@@ -72,6 +78,7 @@ final class QuickWindowModel {
                     Task { @MainActor in if run == self.run { self.preview = partial } }
                 })
                 guard !Task.isCancelled, run == self.run else { return }
+                polished = (text, tone)
                 state = .result(result)
             } catch {
                 guard !Task.isCancelled, !(error is CancellationError), run == self.run else { return }
@@ -92,6 +99,7 @@ final class QuickWindowModel {
 
     func copyResult() {
         guard let result else { return }
+        if let polished { record(polished.text, result.text, polished.tone) }
         copy(result.text)
     }
 

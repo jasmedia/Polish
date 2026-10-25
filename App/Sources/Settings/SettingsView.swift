@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SettingsView: View {
     let settings: SettingsStore
+    let history: HistoryStore
     let status: ModelStatusModel
 
     var body: some View {
@@ -13,6 +14,9 @@ struct SettingsView: View {
             }
             Tab("Dictionary", systemImage: "character.book.closed") {
                 DictionarySettingsView(settings: settings)
+            }
+            Tab("Privacy", systemImage: "hand.raised") {
+                PrivacySettingsView(settings: settings, history: history)
             }
             Tab("Permissions", systemImage: "lock.shield") {
                 PermissionsSettingsView(status: status)

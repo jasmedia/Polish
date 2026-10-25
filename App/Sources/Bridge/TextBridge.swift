@@ -13,6 +13,8 @@ struct Draft {
     var source: Source
     /// The app the text came from. Replace refuses to type into any other app.
     var processID: pid_t?
+    /// That app's name, for the history (FR-14).
+    var appName: String?
     /// The field, when Accessibility exposes it; used to set the text back without the clipboard.
     var element: AXUIElement?
     /// Selection bounds in Accessibility coordinates (top-left origin), for placing the panel.
@@ -92,7 +94,8 @@ final class AccessibilityBridge: TextBridging {
         }
 
         await Keyboard.waitForModifierRelease()
-        var draft = Draft(text: "", source: .focusedField, processID: app.processIdentifier, element: field)
+        var draft = Draft(text: "", source: .focusedField, processID: app.processIdentifier,
+                          appName: app.localizedName, element: field)
 
         if let selected = field?.string(kAXSelectedTextAttribute), !selected.isBlank {
             Log.bridge.info("Read selection through Accessibility (\(selected.count, privacy: .public) chars)")
@@ -126,7 +129,8 @@ final class AccessibilityBridge: TextBridging {
         else { throw BridgeError.noText }
         let field = AXUIElementCreateApplication(app.processIdentifier).element(kAXFocusedUIElementAttribute)
         Log.bridge.info("Read selection from Services (\(text.count, privacy: .public) chars)")
-        return Draft(text: text, source: .focusedField, processID: app.processIdentifier, element: field,
+        return Draft(text: text, source: .focusedField, processID: app.processIdentifier,
+                     appName: app.localizedName, element: field,
                      anchor: field?.selectionBounds ?? field?.frame)
     }
 

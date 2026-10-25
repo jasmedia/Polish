@@ -21,6 +21,8 @@ final class PolishController {
     @ObservationIgnored private unowned let presenter: any ReviewPresenting
     @ObservationIgnored private let defaultTone: @MainActor () -> Tone
     @ObservationIgnored private let showChanges: @MainActor () -> Bool
+    /// Called with each rewrite the user accepts or copies, for the history (FR-14).
+    @ObservationIgnored private let record: @MainActor (Draft, String, Tone) -> Void
     @ObservationIgnored private var draft: Draft?
     /// The running read, polish or replace. Internal so tests can await it.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
@@ -28,12 +30,14 @@ final class PolishController {
 
     init(bridge: any TextBridging, pipeline: Pipeline, presenter: any ReviewPresenting,
          defaultTone: @escaping @MainActor () -> Tone = { .keep },
-         showChanges: @escaping @MainActor () -> Bool = { false }) {
+         showChanges: @escaping @MainActor () -> Bool = { false },
+         record: @escaping @MainActor (Draft, String, Tone) -> Void = { _, _, _ in }) {
         self.bridge = bridge
         self.pipeline = pipeline
         self.presenter = presenter
         self.defaultTone = defaultTone
         self.showChanges = showChanges
+        self.record = record
     }
 
     func polishFocusedField() {
@@ -51,6 +55,7 @@ final class PolishController {
 
     func accept() {
         guard let review, let draft, let text = review.acceptedText else { return }
+        record(draft, text, review.tone)
         dismiss()
         work = Task {
             do {
@@ -65,7 +70,8 @@ final class PolishController {
     }
 
     func copy() {
-        guard let text = review?.acceptedText else { return }
+        guard let review, let draft, let text = review.acceptedText else { return }
+        record(draft, text, review.tone)
         bridge.copyToClipboard(text)
         dismiss()
     }

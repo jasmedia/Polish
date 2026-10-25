@@ -13,7 +13,7 @@ struct PolishApp: App {
             MenuContent(app: app)
         }
         Settings {
-            SettingsView(settings: app.settings, status: app.status)
+            SettingsView(settings: app.settings, history: app.history, status: app.status)
         }
     }
 }
@@ -24,6 +24,7 @@ struct PolishApp: App {
 final class AppModel {
     let status: ModelStatusModel
     let settings = SettingsStore()
+    let history = HistoryStore()
     let controller: PolishController
     @ObservationIgnored private let presenter = ReviewPanelPresenter()
     @ObservationIgnored private var onboarding: OnboardingWindowController?
@@ -39,12 +40,18 @@ final class AppModel {
         let bridge = AccessibilityBridge()
         controller = PolishController(bridge: bridge, pipeline: pipeline, presenter: presenter,
                                       defaultTone: { [settings] in settings.tone },
-                                      showChanges: { [settings] in settings.showChanges })
+                                      showChanges: { [settings] in settings.showChanges },
+                                      record: { [history] draft, rewrite, tone in
+                                          history.record(original: draft.text, rewrite: rewrite, tone: tone, app: draft.appName)
+                                      })
         presenter.controller = controller
         status = ModelStatusModel(updates: ModelAvailability.updates())
         status.onChange = { [controller] in controller.modelStatusChanged($0) }
         quickWindow = QuickWindowController(model: QuickWindowModel(
             pipeline: pipeline, tone: settings.tone, showChanges: { [settings] in settings.showChanges },
+            record: { [history] original, rewrite, tone in
+                history.record(original: original, rewrite: rewrite, tone: tone, app: nil)
+            },
             copy: { bridge.copyToClipboard($0) }
         ))
         services = ServiceProvider { [controller] in controller.polishServiceText($0) }
@@ -61,8 +68,14 @@ final class AppModel {
             NSUpdateDynamicServices()
             if self?.settings.hasCompletedOnboarding == false { self?.showOnboarding() }
         }
-        hotkeyTask = Task { [controller] in
+        hotkeyTask = Task { [controller, settings] in
             for await _ in KeyboardShortcuts.events(.keyUp, for: .polish) {
+                // FR-15: the shortcut does nothing in apps that aren't on the list.
+                let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                guard settings.isEnabled(bundleID: bundleID) else {
+                    Log.ui.info("Shortcut ignored in \(bundleID ?? "unknown app", privacy: .public): not enabled")
+                    continue
+                }
                 controller.polishFocusedField()
             }
         }

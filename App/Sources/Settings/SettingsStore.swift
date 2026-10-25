@@ -34,6 +34,18 @@ final class SettingsStore {
         }
     }
 
+    /// The Polish shortcut works in every app, ignoring `enabledApps` (FR-15). Off by default.
+    var allApps: Bool {
+        didSet { defaults.set(allApps, forKey: Keys.allApps) }
+    }
+
+    /// Bundle IDs of the apps where the Polish shortcut works (FR-15), in the order added. Slack by default.
+    private(set) var enabledApps: [String] {
+        didSet { defaults.set(enabledApps, forKey: Keys.enabledApps) }
+    }
+
+    static let slackBundleID = "com.tinyspeck.slackmacgap"
+
     /// Called with the new list after every change, to hand it to the pipeline.
     @ObservationIgnored var onDictionaryChange: (([String]) -> Void)?
     @ObservationIgnored private let defaults: UserDefaults
@@ -43,6 +55,8 @@ final class SettingsStore {
         static let tone = "tone"
         static let dictionary = "dictionary"
         static let showChanges = "showChanges"
+        static let allApps = "allApps"
+        static let enabledApps = "enabledApps"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -52,6 +66,24 @@ final class SettingsStore {
         tone = defaults.string(forKey: Keys.tone).flatMap(Tone.init(rawValue:)) ?? .keep
         showChanges = defaults.bool(forKey: Keys.showChanges)
         dictionary = defaults.stringArray(forKey: Keys.dictionary) ?? []
+        allApps = defaults.bool(forKey: Keys.allApps)
+        enabledApps = defaults.stringArray(forKey: Keys.enabledApps) ?? [Self.slackBundleID]
+    }
+
+    /// Whether the Polish shortcut should act in the app with this bundle ID. Elsewhere it does nothing.
+    func isEnabled(bundleID: String?) -> Bool {
+        if allApps { return true }
+        guard let bundleID else { return false }
+        return enabledApps.contains(bundleID)
+    }
+
+    func addEnabledApp(_ bundleID: String) {
+        guard !enabledApps.contains(bundleID) else { return }
+        enabledApps.append(bundleID)
+    }
+
+    func removeEnabledApp(_ bundleID: String) {
+        enabledApps.removeAll { $0 == bundleID }
     }
 
     enum DictionaryEntryProblem: Equatable {

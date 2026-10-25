@@ -2,7 +2,7 @@
 name = "polish-eval"
 version = "0.1.0"
 description = "Prompt evaluation for Polish using Apple's Foundation Models SDK for Python"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "apple-fm-sdk>=0.2.1",
     "pandas>=2.2",

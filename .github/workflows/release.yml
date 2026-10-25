@@ -27,14 +27,28 @@ jobs:
   release:
     name: Build and publish
     runs-on: xcode-27
-    # Pushes the version bump and the tag, and creates the release.
+    # The release app's key is only needed (and only allowed) for the button run on main; a tag
+    # push isn't a protected branch, so it runs without the environment.
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'release' || '' }}
+    # Creates the release and its tag. The version bump goes to main as the release app.
     permissions:
       contents: write
     steps:
+      # The main ruleset blocks every push except from the release app (its bypass list).
+      - name: Get a release app token
+        id: app-token
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          permission-contents: write
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # A run from the button bumps the version on main, so it needs main itself.
           ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
 
       - name: Bump the version
         if: github.event_name == 'workflow_dispatch'
@@ -62,7 +76,7 @@ jobs:
       - name: Check the tag is new
         run: |
           git fetch --tags --quiet
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] &&git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] && git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
             echo "::error::Tag ${TAG} already exists"
             exit 1
           fi
@@ -75,7 +89,7 @@ jobs:
         run: scripts/release.sh
 
       # Only after the build passed, so a failed run leaves main and the tags as they were.
-      - name: Commit and tag the version bump
+      - name: Commit the version bump
         if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions[bot]"
@@ -84,14 +98,15 @@ jobs:
             git commit -m "Release ${TAG}" App/Info.plist
             git push origin HEAD:main
           fi
-          git tag "${TAG}"
-          git push origin "${TAG}"
 
+      # The release creates the tag with GITHUB_TOKEN, which starts no workflows. A tag pushed with
+      # the app token would start this workflow again on the tag.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${TAG}" .build/release-dist/* \
+            --target "$(git rev-parse HEAD)" \
             --title "Polish ${TAG#v}" \
             --notes-file .github/release-notes.md \
             --generate-notes

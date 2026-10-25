@@ -25,13 +25,16 @@ final class QuickWindowModel {
 
     @ObservationIgnored private let pipeline: Pipeline
     @ObservationIgnored private let copy: (String) -> Void
+    @ObservationIgnored private let showChanges: @MainActor () -> Bool
     /// The running polish. Internal so tests can await it.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored private var run = 0
 
-    init(pipeline: Pipeline, tone: Tone, copy: @escaping (String) -> Void) {
+    init(pipeline: Pipeline, tone: Tone, showChanges: @escaping @MainActor () -> Bool = { false },
+         copy: @escaping (String) -> Void) {
         self.pipeline = pipeline
         self.tone = tone
+        self.showChanges = showChanges
         self.copy = copy
     }
 
@@ -42,6 +45,9 @@ final class QuickWindowModel {
     var canPolish: Bool {
         !isRunning && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    /// Settings › Show a list of changes (FR-9).
+    var showsChanges: Bool { showChanges() }
 
     var result: PolishResult? {
         if case .result(let result) = state { result } else { nil }

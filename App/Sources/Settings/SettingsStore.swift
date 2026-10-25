@@ -20,6 +20,12 @@ final class SettingsStore {
         didSet { defaults.set(tone.rawValue, forKey: Keys.tone) }
     }
 
+    /// Asks the model for a short list of the fixes with a reason each, shown under the diff (FR-9). Off by
+    /// default: the model writes the list after the text, which adds time to every polish.
+    var showChanges: Bool {
+        didSet { defaults.set(showChanges, forKey: Keys.showChanges) }
+    }
+
     /// Words and names Polish never changes (FR-11), in the order added. Ships empty.
     private(set) var dictionary: [String] {
         didSet {
@@ -36,6 +42,7 @@ final class SettingsStore {
         static let onboardingCompleted = "onboardingCompleted"
         static let tone = "tone"
         static let dictionary = "dictionary"
+        static let showChanges = "showChanges"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -43,6 +50,7 @@ final class SettingsStore {
         launchAtLogin = SMAppService.mainApp.status == .enabled
         hasCompletedOnboarding = defaults.bool(forKey: Keys.onboardingCompleted)
         tone = defaults.string(forKey: Keys.tone).flatMap(Tone.init(rawValue:)) ?? .keep
+        showChanges = defaults.bool(forKey: Keys.showChanges)
         dictionary = defaults.stringArray(forKey: Keys.dictionary) ?? []
     }
 

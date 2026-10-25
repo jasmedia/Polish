@@ -37,12 +37,14 @@ final class AppModel {
         settings.onDictionaryChange = { pipeline.dictionary = $0 }
         let bridge = AccessibilityBridge()
         controller = PolishController(bridge: bridge, pipeline: pipeline, presenter: presenter,
-                                      defaultTone: { [settings] in settings.tone })
+                                      defaultTone: { [settings] in settings.tone },
+                                      showChanges: { [settings] in settings.showChanges })
         presenter.controller = controller
         status = ModelStatusModel(updates: ModelAvailability.updates())
         status.onChange = { [controller] in controller.modelStatusChanged($0) }
         quickWindow = QuickWindowController(model: QuickWindowModel(
-            pipeline: pipeline, tone: settings.tone, copy: { bridge.copyToClipboard($0) }
+            pipeline: pipeline, tone: settings.tone, showChanges: { [settings] in settings.showChanges },
+            copy: { bridge.copyToClipboard($0) }
         ))
         services = ServiceProvider { [controller] in controller.polishServiceText($0) }
         let onboardingModel = OnboardingModel(pipeline: pipeline)

@@ -35,6 +35,16 @@ struct QuickWindowTests {
         #expect(fixed.requests.last?.instructions.contains("Tone: professional") == true)
     }
 
+    @Test func showsTheChangeListWhenItIsOn() async {
+        let fixed = FixedModel(["I will send the report tomorrow."])
+        let model = QuickWindowModel(pipeline: Pipeline(model: fixed), tone: .keep, showChanges: { true }) { _ in }
+        model.text = "i will send the report tmrw"
+        model.polish()
+        await model.work?.value
+        #expect(model.showsChanges)
+        #expect(model.result?.changes.map(\.reason) == [.capitalization, .shorthand])
+    }
+
     @Test func editingTheTextClearsAStaleResult() async {
         let clipboard = Clipboard()
         let (model, _) = model(["I will send the report tomorrow."], clipboard: clipboard)

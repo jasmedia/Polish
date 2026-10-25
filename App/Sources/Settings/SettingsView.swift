@@ -30,6 +30,10 @@ private struct GeneralSettingsView: View {
             KeyboardShortcuts.Recorder("Polish shortcut:", name: .polish)
             KeyboardShortcuts.Recorder("Quick Polish shortcut:", name: .quickPolish)
             TonePicker(tone: $settings.tone, title: "Default tone")
+            Toggle(isOn: $settings.showChanges) {
+                Text("Show a list of changes")
+                Text("A reason for each fix, under the rewrite. Polishing takes a little longer.")
+            }
             Toggle("Launch at login", isOn: Binding(
                 get: { settings.launchAtLogin },
                 set: { settings.setLaunchAtLogin($0) }

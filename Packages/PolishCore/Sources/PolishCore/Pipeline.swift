@@ -7,8 +7,6 @@ public struct PolishResult: Sendable {
     /// The rewrite, or `original` exactly when nothing changed or validation fell back.
     public var text: String
     public var diff: [DiffSegment]
-    /// Notable fixes, when the change list was requested.
-    public var changes: [Change]
     /// Validation failures of chunks that kept their original text. Empty when the rewrite was accepted.
     public var fallbacks: [[ValidationFailure]]
     public var trace: Trace
@@ -61,7 +59,7 @@ public final class Pipeline: Sendable {
     private let dictionaryWords: Mutex<[String]>
     private let instructions: InstructionsBuilder
     private let configuration: Configuration
-    /// Input budget in tokens per (tone, change list) pair, computed once from the model's context size.
+    /// Input budget in tokens per tone, computed once from the model's context size.
     private let budgets = Mutex<[String: Int]>([:])
 
     public init(
@@ -96,7 +94,6 @@ public final class Pipeline: Sendable {
     public func polish(
         text original: String,
         tone: Tone = .keep,
-        withChanges: Bool = false,
         progress: (@Sendable (PolishProgress) -> Void)? = nil,
         preview: (@Sendable (String) -> Void)? = nil
     ) async throws -> PolishResult {
@@ -116,24 +113,22 @@ public final class Pipeline: Sendable {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             let trace = PolishResult.Trace(placeholders: protected.tokens.count, chunks: [], duration: clock.now - start)
             return PolishResult(original: original, text: original, diff: Differ.diff(original: original, rewritten: original),
-                                changes: [], fallbacks: [], trace: trace)
+                                fallbacks: [], trace: trace)
         }
 
-        let budget = try await inputBudget(tone: tone, withChanges: withChanges)
+        let budget = try await inputBudget(tone: tone)
         let chunks = try await split(source, budget: budget)
 
         var output = ""
-        var changes: [Change] = []
         var fallbacks: [[ValidationFailure]] = []
         var traces: [PolishResult.ChunkTrace] = []
         let tracker = ProgressTracker(total: chunks.count, report: progress, preview: preview)
         for chunk in chunks {
             try Task.checkCancellation()
-            let rewritten = try await rewrite(chunk.text, protected: protected, tone: tone, withChanges: withChanges,
+            let rewritten = try await rewrite(chunk.text, protected: protected, tone: tone,
                                               budget: budget, allowRechunk: true, allowLineSplit: true, progress: tracker)
             tracker.finish()
             output += rewritten.text + chunk.separator
-            changes += rewritten.changes
             fallbacks += rewritten.fallbacks
             traces.append(rewritten.trace)
         }
@@ -141,9 +136,6 @@ public final class Pipeline: Sendable {
         var text = protected.restore(output)
         if text == protected.restore(source) {
             text = original  // only normalization changed: give back the draft byte for byte
-        }
-        let changeList = changes.map {
-            Change(from: protected.restore($0.from), to: protected.restore($0.to), reason: $0.reason)
         }
         let trace = PolishResult.Trace(placeholders: protected.tokens.count, chunks: traces, duration: clock.now - start)
         let attempts = traces.flatMap(\.attempts)
@@ -155,14 +147,13 @@ public final class Pipeline: Sendable {
             \(trace.duration.formatted(.units(allowed: [.milliseconds], width: .narrow)), privacy: .public)
             """)
         return PolishResult(original: original, text: text, diff: Differ.diff(original: original, rewritten: text),
-                            changes: changeList, fallbacks: fallbacks, trace: trace)
+                            fallbacks: fallbacks, trace: trace)
     }
 
     // MARK: Steps
 
     private struct Rewritten {
         var text: String
-        var changes: [Change]
         var fallbacks: [[ValidationFailure]]
         var trace: PolishResult.ChunkTrace
     }
@@ -172,7 +163,6 @@ public final class Pipeline: Sendable {
         _ source: String,
         protected: ProtectedText,
         tone: Tone,
-        withChanges: Bool,
         budget: Int,
         allowRechunk: Bool,
         allowLineSplit: Bool,
@@ -183,8 +173,7 @@ public final class Pipeline: Sendable {
             instructions: instructions.build(tone: tone, placeholders: numbers, leading: leadingPlaceholder(source, protected)),
             prompt: source,
             temperature: configuration.temperature,
-            maximumResponseTokens: source.unicodeScalars.count / 2 + 200,
-            withChanges: withChanges
+            maximumResponseTokens: source.unicodeScalars.count / 2 + 200
         )
         let validator = Validator(tone: tone)
         var attempts: [PolishResult.Attempt] = []
@@ -206,7 +195,7 @@ public final class Pipeline: Sendable {
                 guard let polishError = PolishError(modelError: error) else { throw error }
                 Log.engine.error("Generation failed: \(polishError.code, privacy: .public)")
                 if polishError == .tooLong, allowRechunk {
-                    return try await rechunk(source, protected: protected, tone: tone, withChanges: withChanges, budget: budget,
+                    return try await rechunk(source, protected: protected, tone: tone, budget: budget,
                                              progress: progress)
                 }
                 throw polishError
@@ -225,17 +214,17 @@ public final class Pipeline: Sendable {
                 // Other tones change contractions on purpose (Professional writes them out), so only Keep undoes that.
                 let keepStyle = configuration.keepWriterStyle && tone == .keep
                 let text = Restorer.apply(response.text, source: source, keepWriterStyle: keepStyle)
-                return Rewritten(text: text, changes: response.changes, fallbacks: [],
+                return Rewritten(text: text, fallbacks: [],
                                  trace: .init(attempts: attempts, rechunked: false))
             }
             Log.engine.info("Validation failed: \(failures.map(\.description).joined(separator: ", "), privacy: .public)")
             // Restyle tones merge lines they see together, and a retry rarely fixes that (eval/RESULTS.md).
             if tone != .keep, allowLineSplit, failures.contains(.lines) {
-                return try await rewriteInParts(source, protected: protected, tone: tone, withChanges: withChanges,
+                return try await rewriteInParts(source, protected: protected, tone: tone,
                                                budget: budget, firstAttempt: attempts, progress: progress)
             }
         }
-        return Rewritten(text: source, changes: [], fallbacks: [attempts.last?.failures ?? []],
+        return Rewritten(text: source, fallbacks: [attempts.last?.failures ?? []],
                          trace: .init(attempts: attempts, rechunked: false))
     }
 
@@ -244,23 +233,21 @@ public final class Pipeline: Sendable {
         _ source: String,
         protected: ProtectedText,
         tone: Tone,
-        withChanges: Bool,
         budget: Int,
         progress: ProgressTracker
     ) async throws -> Rewritten {
         let pieces = try await Chunker.split(source, budget: budget / 2) { try await model.tokenCount(prompt: $0) }
         guard pieces.count > 1 else { throw PolishError.tooLong }
-        var result = Rewritten(text: "", changes: [], fallbacks: [], trace: .init(attempts: [], rechunked: true))
+        var result = Rewritten(text: "", fallbacks: [], trace: .init(attempts: [], rechunked: true))
         // The caller counts this chunk as one finished part; each piece but the last is a new one.
         progress.grow(pieces.count - 1)
         for (index, piece) in pieces.enumerated() {
             try Task.checkCancellation()
-            let rewritten = try await rewrite(piece.text, protected: protected, tone: tone, withChanges: withChanges,
+            let rewritten = try await rewrite(piece.text, protected: protected, tone: tone,
                                               budget: budget / 2, allowRechunk: false, allowLineSplit: true,
                                               progress: progress)
             if index < pieces.count - 1 { progress.finish() }
             result.text += rewritten.text + piece.separator
-            result.changes += rewritten.changes
             result.fallbacks += rewritten.fallbacks
             result.trace.attempts += rewritten.trace.attempts
         }
@@ -277,12 +264,11 @@ public final class Pipeline: Sendable {
         _ source: String,
         protected: ProtectedText,
         tone: Tone,
-        withChanges: Bool,
         budget: Int,
         firstAttempt: [PolishResult.Attempt],
         progress: ProgressTracker
     ) async throws -> Rewritten {
-        var result = Rewritten(text: "", changes: [], fallbacks: [],
+        var result = Rewritten(text: "", fallbacks: [],
                                trace: .init(attempts: firstAttempt, rechunked: false, splitAfterMerge: true))
         let paragraphs = Chunker.paragraphs(source)
         let byParagraph = paragraphs.count > 1
@@ -298,12 +284,11 @@ public final class Pipeline: Sendable {
             }
             let words = Placeholder.pattern.replacing(in: part.text, with: "").split(whereSeparator: \.isWhitespace).count
             let rewritten = try await rewrite(part.text, protected: protected, tone: words <= 3 ? .keep : tone,
-                                              withChanges: withChanges, budget: budget, allowRechunk: false,
+                                              budget: budget, allowRechunk: false,
                                               allowLineSplit: byParagraph, progress: progress)
             partsLeft -= 1
             if partsLeft > 0 { progress.finish() }
             result.text += rewritten.text + part.separator
-            result.changes += rewritten.changes
             result.fallbacks += rewritten.fallbacks
             result.trace.attempts += rewritten.trace.attempts
         }
@@ -332,14 +317,14 @@ public final class Pipeline: Sendable {
 
     /// Tokens left for the draft: the output is about as long as the input (up to +60%) and shares the
     /// context with the instructions and schema, so the input gets (share × context − fixed) / 2.6.
-    func inputBudget(tone: Tone, withChanges: Bool) async throws -> Int {
-        let key = "\(tone.rawValue)-\(withChanges)"
+    func inputBudget(tone: Tone) async throws -> Int {
+        let key = tone.rawValue
         if let cached = budgets.withLock({ $0[key] }) {
             return cached
         }
         // Instructions with a three-placeholder rule, as measured by eval/tokens.py.
         let sample = instructions.build(tone: tone, placeholders: [1, 2, 3])
-        let fixed = try await model.tokenCount(instructions: sample, withChanges: withChanges)
+        let fixed = try await model.tokenCount(instructions: sample)
         let budget = max(Int((Double(model.contextSize) * configuration.budgetShare - Double(fixed)) / 2.6), 1)
         budgets.withLock { $0[key] = budget }
         Log.engine.info("Input budget: \(budget, privacy: .public) tokens (context \(self.model.contextSize, privacy: .public))")

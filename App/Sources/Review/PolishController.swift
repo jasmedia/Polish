@@ -20,17 +20,20 @@ final class PolishController {
     @ObservationIgnored private let pipeline: Pipeline
     @ObservationIgnored private unowned let presenter: any ReviewPresenting
     @ObservationIgnored private let defaultTone: @MainActor () -> Tone
+    @ObservationIgnored private let showChanges: @MainActor () -> Bool
     @ObservationIgnored private var draft: Draft?
     /// The running read, polish or replace. Internal so tests can await it.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored var unchangedCloseDelay: Duration = .seconds(1.5)
 
     init(bridge: any TextBridging, pipeline: Pipeline, presenter: any ReviewPresenting,
-         defaultTone: @escaping @MainActor () -> Tone = { .keep }) {
+         defaultTone: @escaping @MainActor () -> Tone = { .keep },
+         showChanges: @escaping @MainActor () -> Bool = { false }) {
         self.bridge = bridge
         self.pipeline = pipeline
         self.presenter = presenter
         self.defaultTone = defaultTone
+        self.showChanges = showChanges
     }
 
     func polishFocusedField() {
@@ -122,7 +125,7 @@ final class PolishController {
             }
             guard !Task.isCancelled else { return }
             self.draft = draft
-            let review = ReviewModel(tone: tone)
+            let review = ReviewModel(tone: tone, showsChanges: showChanges())
             show(review, near: draft.anchor)
             Log.ui.info("Hotkey to panel: \((clock.now - pressed).milliseconds, privacy: .public)")
             await polish(draft.text, into: review, pressed: pressed)

@@ -277,3 +277,61 @@ Streaming costs nothing measurable, and long drafts show text after 1.4–2.0 s 
 swift run -c release --package-path Packages/PolishCore polish-cli golden --tone casual --tone-prompt prompts/v2.txt
 uv run --project eval python eval/tones.py eval/runs/tones-*.jsonl
 ```
+
+## Change list (FR-9)
+
+**First try, model-written (dropped):** `RewriteWithChanges` added up to 5 `{from, to, reason}` entries after `text`. Keep my tone, golden set (210 rows), back-to-back runs on 2026-10-25, same build; `polish-cli golden` vs `--with-changes`:
+
+| Metric | Without list | With list |
+| --- | --- | --- |
+| Placeholder integrity after retry | 100.0% | **97.6%** (below the 99% bar) |
+| Unchanged when correct | 95.8% | **87.5%** (below the 95% bar) |
+| Exact match, fix rows | 14.2% | 12.3% |
+| Fallbacks / generation errors | 7 / 0 | 10 / 1 (`ParsingError`) |
+| Latency p50 / p90 | 1.12 s / 2.16 s | **2.33 s / 4.37 s** |
+| Latency median, drafts ≥ 60 words | 8.1 s | 12.2 s |
+| Output tokens, median per row | 41 | 93 |
+
+The list itself is weak:
+- Each changed row lists 2.6 entries on average (a typical draft has more fixes than that).
+- 85% of entries quote words that are really in the draft. Only 76% of the "to" words are in the rewrite.
+- 82% of the rows that came back unchanged still had a list, with reasons like "no change", "none" and "placeholder consistency" (28, 9 and 46 of 404 entries).
+
+Streaming hides less of the cost here: the list is written after the text, so the preview finishes and the panel keeps waiting.
+
+Asking the model for the list doubled latency and pushed two Phase 1 bars below target, so `RewriteWithChanges` was removed.
+
+**Shipped, built from the diff:** `Differ.changes(_:)` (`PolishResult.changes`) turns each run of changed words in the panel's diff into one entry. The reason comes from the edit:
+- capitalization or punctuation when only those differ;
+- wrong word for a short list of commonly confused pairs (their/there, to/too, then/than…);
+- grammar for another form of the same word (look → looks, is → are, a → an);
+- spelling for a one- or two-letter edit inside one word, or a word split or joined (in to → into);
+- shorthand for the chat abbreviations the prompt expands (u, pls, thx, tmrw, eod…);
+- wording otherwise.
+
+The model call is the same with the setting on or off. Settings › Show a list of changes (off by default) only decides whether the panel and quick window show the list.
+
+Golden set, 2026-10-25 (`eval/changes.py`; rewrite metrics are unchanged, since the model call is the same):
+
+| | Keep my tone | Casual (v2) |
+| --- | --- | --- |
+| Rows changed | 153 | 170 |
+| Entries per changed row, median / p90 | 4 / 9 | 3 / 7 |
+| Changed rows with more than 10 entries | 7.8% | 4.7% |
+| `homophone` rows listing a wrong word | 91.7% | 92.0% |
+| `typo` rows listing spelling or shorthand | 54.1% | 51.5% |
+| Reasons: capitalization / punctuation / wording | 29% / 24% / 27% | 23% / 19% / 35% |
+| Reasons: grammar / spelling / shorthand / wrong word | 7% / 5% / 5% / 3% | 8% / 5% / 6% / 4% |
+| Latency p50 / p90 | 1.17 s / 2.29 s | 1.33 s / 2.42 s |
+
+Keep my tone latency without the list, same day: 1.11 s / 2.16 s. Two runs of this exact build gave p50 1.06 s and 1.22 s, so the gap is run-to-run noise.
+
+Every entry quotes the draft and the rewrite exactly, by construction.
+- **Spelling:** 30 of 35 entries in one run are real typos. Misfires are near-miss words: `you → your`, `no → not`, `grow → grew`, and two rephrasings.
+- **`typo` rows (54%):** these rows also carry apostrophe and wording fixes the tag doesn't separate. The rest list them as punctuation or wording, not as wrong reasons.
+- **Long rewrites:** a long Casual rewrite lists more entries (p90 7), and the list stays collapsed.
+
+```bash
+swift run -c release --package-path Packages/PolishCore polish-cli golden
+uv run --project eval python eval/changes.py eval/runs/<run>.jsonl
+```

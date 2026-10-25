@@ -91,6 +91,9 @@ struct ReviewView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("Rewrite")
                 .accessibilityValue(result.text)
+                if model.showsChanges, case let changes = result.changes, !changes.isEmpty {
+                    ChangeList(changes: changes)
+                }
             }
         }
     }

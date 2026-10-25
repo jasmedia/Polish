@@ -70,6 +70,9 @@ struct QuickWindowView: View {
                 resultBox(Text(DiffText.attributed(result.diff, showRemovals: model.showRemovals)))
                     .accessibilityLabel("Rewrite")
                     .accessibilityValue(result.text)
+                if model.showsChanges, case let changes = result.changes, !changes.isEmpty {
+                    ChangeList(changes: changes)
+                }
                 if result.didFallBack {
                     Label("Some parts were kept as you wrote them.", systemImage: "info.circle")
                         .font(.caption)

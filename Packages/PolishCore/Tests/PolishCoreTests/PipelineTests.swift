@@ -24,7 +24,7 @@ final class ScriptedModel: RewriteModel {
     var requests: [GenerationRequest] { log.withLock { $0 } }
 
     func tokenCount(prompt: String) async throws -> Int { prompt.split(whereSeparator: \.isWhitespace).count }
-    func tokenCount(instructions: String, withChanges: Bool) async throws -> Int { 100 }
+    func tokenCount(instructions: String) async throws -> Int { 100 }
     func prewarm(instructions: String) {}
 
     func generate(_ request: GenerationRequest) async throws -> GenerationResponse {
@@ -255,24 +255,18 @@ struct PipelineTests {
     }
 
     @Test func changesHavePlaceholdersRestored() async throws {
-        final class ChangesModel: RewriteModel {
-            let status = ModelStatus.ready
-            let contextSize = 8192
-            func tokenCount(prompt: String) async throws -> Int { 1 }
-            func tokenCount(instructions: String, withChanges: Bool) async throws -> Int { 100 }
-            func prewarm(instructions: String) {}
-            func generate(_ request: GenerationRequest) async throws -> GenerationResponse {
-                GenerationResponse(text: "Ask ⟦T1⟧ to review it.",
-                                   changes: [Change(from: "ask ⟦T1⟧ 2", to: "Ask ⟦T1⟧ to", reason: "wrong word")])
-            }
-        }
-        let result = try await Pipeline(model: ChangesModel()).polish(text: "ask @Sam 2 review it", withChanges: true)
-        #expect(result.changes == [Change(from: "ask @Sam 2", to: "Ask @Sam to", reason: "wrong word")])
+        let model = ScriptedModel([.text("Ask ⟦T1⟧ to review it.")])
+        let result = try await Pipeline(model: model).polish(text: "ask @Sam 2 review it")
+        #expect(result.changes == [
+            Change(from: "ask", to: "Ask", reason: .capitalization),
+            Change(from: "2", to: "to", reason: .wording),
+            Change(from: "it", to: "it.", reason: .punctuation),
+        ])
     }
 
     @Test func budgetComesFromTheContextSize() async throws {
-        let small = try await Pipeline(model: ScriptedModel([], contextSize: 4096)).inputBudget(tone: .keep, withChanges: false)
-        let large = try await Pipeline(model: ScriptedModel([], contextSize: 8192)).inputBudget(tone: .keep, withChanges: false)
+        let small = try await Pipeline(model: ScriptedModel([], contextSize: 4096)).inputBudget(tone: .keep)
+        let large = try await Pipeline(model: ScriptedModel([], contextSize: 8192)).inputBudget(tone: .keep)
         #expect(small == Int((4096 * 0.7 - 100) / 2.6))
         #expect(large == Int((8192 * 0.7 - 100) / 2.6))
     }

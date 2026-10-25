@@ -7,20 +7,17 @@ public struct GenerationRequest: Equatable, Sendable {
     public var prompt: String
     public var temperature: Double
     public var maximumResponseTokens: Int
-    public var withChanges: Bool
 }
 
 public struct GenerationResponse: Equatable, Sendable {
     public var text: String
     public var mistakes: [String]
-    public var changes: [Change]
     /// Tokens the model read (instructions, schema and prompt) and wrote, when the model reports them.
     public var usage: TokenUsage?
 
-    public init(text: String, mistakes: [String] = [], changes: [Change] = [], usage: TokenUsage? = nil) {
+    public init(text: String, mistakes: [String] = [], usage: TokenUsage? = nil) {
         self.text = text
         self.mistakes = mistakes
-        self.changes = changes
         self.usage = usage
     }
 }
@@ -47,7 +44,7 @@ public protocol RewriteModel: Sendable {
     var contextSize: Int { get }
     func tokenCount(prompt: String) async throws -> Int
     /// Tokens used by the instructions plus the output schema.
-    func tokenCount(instructions: String, withChanges: Bool) async throws -> Int
+    func tokenCount(instructions: String) async throws -> Int
     /// Loads the model ahead of a request (called when the hotkey is pressed).
     func prewarm(instructions: String)
     func generate(_ request: GenerationRequest) async throws -> GenerationResponse
@@ -81,9 +78,8 @@ public final class FoundationModelBackend: RewriteModel {
         try await model.tokenCount(for: prompt)
     }
 
-    public func tokenCount(instructions: String, withChanges: Bool) async throws -> Int {
-        let schema = withChanges ? RewriteWithChanges.generationSchema : RewriteWithMistakes.generationSchema
-        return try await model.tokenCount(for: Instructions(instructions)) + model.tokenCount(for: schema)
+    public func tokenCount(instructions: String) async throws -> Int {
+        try await model.tokenCount(for: Instructions(instructions)) + model.tokenCount(for: RewriteWithMistakes.generationSchema)
     }
 
     public func prewarm(instructions: String) {
@@ -94,10 +90,6 @@ public final class FoundationModelBackend: RewriteModel {
 
     public func generate(_ request: GenerationRequest) async throws -> GenerationResponse {
         let (session, options) = start(request)
-        if request.withChanges {
-            return GenerationResponse(try await session.respond(to: request.prompt, generating: RewriteWithChanges.self,
-                                                                options: options))
-        }
         return GenerationResponse(try await session.respond(to: request.prompt, generating: RewriteWithMistakes.self,
                                                             options: options))
     }
@@ -105,13 +97,6 @@ public final class FoundationModelBackend: RewriteModel {
     public func generate(_ request: GenerationRequest, partialText: @escaping @Sendable (String) -> Void) async throws -> GenerationResponse {
         let (session, options) = start(request)
         // The schema puts `mistakes` first, so text arrives only once the list is written.
-        if request.withChanges {
-            let stream = session.streamResponse(to: request.prompt, generating: RewriteWithChanges.self, options: options)
-            for try await snapshot in stream {
-                if let text = snapshot.content.text { partialText(text) }
-            }
-            return GenerationResponse(try await stream.collect())
-        }
         let stream = session.streamResponse(to: request.prompt, generating: RewriteWithMistakes.self, options: options)
         for try await snapshot in stream {
             if let text = snapshot.content.text { partialText(text) }
@@ -134,11 +119,6 @@ public final class FoundationModelBackend: RewriteModel {
 extension GenerationResponse {
     init(_ result: LanguageModelSession.Response<RewriteWithMistakes>) {
         self.init(text: result.content.text, mistakes: result.content.mistakes, usage: TokenUsage(result.usage))
-    }
-
-    init(_ result: LanguageModelSession.Response<RewriteWithChanges>) {
-        let changes = result.content.changes.map { Change(from: $0.from, to: $0.to, reason: $0.reason) }
-        self.init(text: result.content.text, mistakes: result.content.mistakes, changes: changes, usage: TokenUsage(result.usage))
     }
 }
 

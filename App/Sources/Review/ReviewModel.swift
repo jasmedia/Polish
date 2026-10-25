@@ -58,6 +58,8 @@ final class ReviewModel {
 
     var state: State
     var tone: Tone
+    /// Settings › Show a list of changes, read when the hotkey was pressed (FR-9).
+    let showsChanges: Bool
     /// Parts of a long draft done so far (FR-12); nil until the pipeline reports.
     private(set) var progress: PolishProgress?
     /// The part being written, as the model streams it; not validated, so shown dimmed while loading.
@@ -68,9 +70,10 @@ final class ReviewModel {
     var isEditing = false
     var editedText = ""
 
-    init(state: State = .loading, tone: Tone = .keep) {
+    init(state: State = .loading, tone: Tone = .keep, showsChanges: Bool = false) {
         self.state = state
         self.tone = tone
+        self.showsChanges = showsChanges
     }
 
     /// Clears the progress for a new polish run and returns its number for `update(_:run:)`.

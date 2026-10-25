@@ -1,3 +1,4 @@
+import Foundation
 import CoreGraphics
 import Synchronization
 import Testing
@@ -21,7 +22,7 @@ final class FixedModel: RewriteModel {
     var requests: [GenerationRequest] { state.withLock { $0.requests } }
 
     func tokenCount(prompt: String) async throws -> Int { prompt.split(whereSeparator: \.isWhitespace).count }
-    func tokenCount(instructions: String, withChanges: Bool) async throws -> Int { 100 }
+    func tokenCount(instructions: String) async throws -> Int { 100 }
     func prewarm(instructions: String) {}
 
     func generate(_ request: GenerationRequest) async throws -> GenerationResponse {
@@ -84,6 +85,28 @@ struct PolishControllerTests {
                                           defaultTone: { tone })
         controller.unchangedCloseDelay = .zero
         return controller
+    }
+
+    @Test func changeListSettingIsReadOnEachPress() async {
+        let bridge = FakeBridge("i will send the report tmrw")
+        let model = FixedModel(["I will send the report tomorrow.", "I will send the report tomorrow."])
+        var shown: [Bool] = []
+        let settings = SettingsStore(defaults: UserDefaults(suiteName: "PolishControllerTests.showChanges")!)
+        settings.showChanges = false
+        let controller = PolishController(bridge: bridge, pipeline: Pipeline(model: model), presenter: presenter,
+                                          showChanges: { settings.showChanges })
+        controller.polishFocusedField()
+        await controller.work?.value
+        shown.append(controller.review?.showsChanges ?? true)
+        settings.showChanges = true
+        controller.polishFocusedField()
+        await controller.work?.value
+        shown.append(controller.review?.showsChanges ?? false)
+        #expect(shown == [false, true])
+        #expect(controller.review?.result?.changes == [
+            Change(from: "i", to: "I", reason: .capitalization),
+            Change(from: "tmrw", to: "tomorrow.", reason: .shorthand),
+        ])
     }
 
     @Test func acceptPutsTheRewriteBack() async {

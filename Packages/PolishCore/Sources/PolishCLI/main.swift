@@ -105,6 +105,14 @@ struct Record: Encodable {
     var chunks: Int
     /// Per model call: seconds, tokens in and out, and why validation failed.
     var calls: [Call] = []
+    /// The change list the panel shows (FR-9), built from the diff.
+    var changes: [ChangeRecord] = []
+
+    struct ChangeRecord: Encodable {
+        var from: String
+        var to: String
+        var reason: String
+    }
 
     struct Call: Encodable {
         var seconds: Double
@@ -168,6 +176,7 @@ func runGolden(_ options: Options) async throws {
                 Record.Call(seconds: $0.duration.seconds, tokens_in: $0.usage?.input, tokens_out: $0.usage?.output,
                             failures: $0.failures.map(\.description))
             }
+            record.changes = result.changes.map { .init(from: $0.from, to: $0.to, reason: $0.reason.rawValue) }
             record.output = result.text
             record.fallback = result.didFallBack
         } catch let error as PolishError {
@@ -217,6 +226,9 @@ func runRewrite(_ options: Options) async throws {
             FileHandle.standardError.write(Data("(first text after \(first), done after \(String(format: "%.2f s", (ContinuousClock.now - start).seconds)))\n".utf8))
         }
         print(result.text)
+        for change in result.changes {
+            FileHandle.standardError.write(Data("  \(change.from) → \(change.to): \(change.reason.rawValue)\n".utf8))
+        }
         if result.didFallBack {
             let reasons = result.fallbacks.flatMap { $0 }.map(\.description).joined(separator: ", ")
             FileHandle.standardError.write(Data("(kept the original: \(reasons))\n".utf8))

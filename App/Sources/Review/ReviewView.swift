@@ -43,9 +43,16 @@ struct ReviewView: View {
     private var content: some View {
         switch model.state {
         case .loading:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Polishing…")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(model.loadingTitle)
+                        .monospacedDigit()
+                }
+                if let progress = model.progress, progress.total > 1 {
+                    ProgressView(value: Double(progress.completed), total: Double(progress.total))
+                        .accessibilityHidden(true)
+                }
             }
             .accessibilityElement(children: .combine)
         case .unchanged:

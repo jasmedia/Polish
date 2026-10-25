@@ -239,6 +239,29 @@ One call per message as before. When a restyle attempt merges lines, the pipelin
 2. **Long drafts are slow.** 5–6 of the 10 long rows merge lines and take the line-by-line path: median 27–30 s. Keep my tone already takes 8.9 s median on these rows, over the ≤ 8 s p90 target for 300 words (FR-12), so long drafts need either progress UI or fewer calls whatever the tone.
 3. **Under-correction** in Casual and Professional (lowercase sentence starts kept on about a quarter of the sampled rows), and one curly → single quote swap in Professional.
 
+## Long drafts (FR-12)
+
+`polish-cli golden` now records every model call (`calls`: seconds, tokens in and out, failures). On the 10 long rows (217–286 words), 2026-10-25:
+
+- **The model writes about 47 tokens a second**, so time follows output tokens. Keep my tone makes one call of 357–549 output tokens: 7.5–11.6 s. That is near the floor for one call; the ≤ 8 s p90 target for 300 words is missed by about a second.
+- **Each extra call costs output, not input.** Rewriting a draft line by line wrote 1,000–2,500 output tokens over 11–16 calls (2.5–6× one call), because every call repeats the mistakes list and schema.
+
+**Change:** after a merge, the restyle tones rewrite paragraph by paragraph and go line by line only inside a paragraph that merges again (`Pipeline.rewriteInParts`, `ChunkTrace.splitAfterMerge`).
+
+| Metric | v2d casual | v2d prof. | v2e casual | v2e prof. |
+| --- | --- | --- | --- | --- |
+| Long rows, median / p90 / max | 26.7 / 30.6 / 51.2 s | 27.8 / 39.2 / 40.7 s | 21.4 / 31.0 / 55.0 s | 9.1 / 24.4 / 28.9 s |
+| Long rows split after a merge | 6 | 5 | 6 | 3 |
+| Fallbacks (of 210) | 7 | 14 | 3 | 9 |
+| Placeholder integrity, after retry | 98.8% | 98.8% | 100% | 98.8% |
+| p90 latency, inputs ≤ 60 words | 1.79 s | 2.10 s | 1.83 s | 2.09 s |
+
+Split rows still take 7–15 calls and 870–2,400 output tokens: a split long draft is about 2–3× slower than one call. The rest of the Professional gain is fewer merges in this run (3 vs 5), likely noise. `long-004` is the worst case in both tones: its first attempt loops to 874 tokens (17.8 s) before the split.
+
+**Progress in the panel:** `Pipeline.polish(progress:)` reports finished parts out of a total that grows when a part is split; the review panel shows "Polishing… part 2 of 5" with a bar when a draft has more than one part.
+
+**Next for speed:** stream the rewrite into the panel as it is generated (perceived latency), and a tighter response cap so a looping first attempt fails sooner.
+
 ```bash
 swift run -c release --package-path Packages/PolishCore polish-cli golden --tone casual --tone-prompt prompts/v2.txt
 uv run --project eval python eval/tones.py eval/runs/tones-*.jsonl

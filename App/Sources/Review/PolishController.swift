@@ -127,8 +127,11 @@ final class PolishController {
     /// `pressed` is when the hotkey fired; when given, the time to the result or error is logged.
     private func polish(_ text: String, into review: ReviewModel, pressed: ContinuousClock.Instant? = nil) async {
         review.state = .loading
+        let run = review.startRun()
         do {
-            let result = try await pipeline.polish(text: text, tone: review.tone)
+            let result = try await pipeline.polish(text: text, tone: review.tone) { progress in
+                Task { @MainActor in review.update(progress, run: run) }
+            }
             guard !Task.isCancelled, self.review === review else { return }
             logResultTime(since: pressed)
             if result.isUnchanged {

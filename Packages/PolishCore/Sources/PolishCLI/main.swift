@@ -100,6 +100,15 @@ struct Record: Encodable {
     var latency_s: Double
     var mistakes: [String]
     var chunks: Int
+    /// Per model call: seconds, tokens in and out, and why validation failed.
+    var calls: [Call] = []
+
+    struct Call: Encodable {
+        var seconds: Double
+        var tokens_in: Int?
+        var tokens_out: Int?
+        var failures: [String]
+    }
 }
 
 func runGolden(_ options: Options) async throws {
@@ -152,13 +161,17 @@ func runGolden(_ options: Options) async throws {
             record.final_problems = result.trace.chunks.flatMap { $0.attempts.last?.failures ?? [] }.map(\.description)
             record.mistakes = result.trace.chunks.flatMap { $0.attempts.first?.mistakes ?? [] }
             record.chunks = result.trace.chunks.count
+            record.calls = attempts.map {
+                Record.Call(seconds: $0.duration.seconds, tokens_in: $0.usage?.input, tokens_out: $0.usage?.output,
+                            failures: $0.failures.map(\.description))
+            }
             record.output = result.text
             record.fallback = result.didFallBack
         } catch let error as PolishError {
             record.error = error.code
         }
         let elapsed = ContinuousClock.now - start
-        record.latency_s = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+        record.latency_s = elapsed.seconds
         output.append(try encoder.encode(record))
         output.append(0x0A)
         FileHandle.standardError.write(Data("\r\(index + 1)/\(rows.count)".utf8))
@@ -209,4 +222,8 @@ default:
                                  [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage]
                polish-cli rewrite [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage] [TEXT]
         """)
+}
+
+extension Duration {
+    var seconds: Double { Double(components.seconds) + Double(components.attoseconds) / 1e18 }
 }

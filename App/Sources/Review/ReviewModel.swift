@@ -50,6 +50,10 @@ final class ReviewModel {
 
     var state: State
     var tone: Tone
+    /// Parts of a long draft done so far (FR-12); nil until the pipeline reports.
+    private(set) var progress: PolishProgress?
+    /// Counts polish runs (Tab starts a new one), so reports from a cancelled run are dropped.
+    private var run = 0
     var showRemovals = false
     var isEditing = false
     var editedText = ""
@@ -57,6 +61,26 @@ final class ReviewModel {
     init(state: State = .loading, tone: Tone = .keep) {
         self.state = state
         self.tone = tone
+    }
+
+    /// Clears the progress for a new polish run and returns its number for `update(_:run:)`.
+    func startRun() -> Int {
+        run += 1
+        progress = nil
+        return run
+    }
+
+    /// Progress reports hop to the main actor one by one and can arrive out of order: keep the furthest.
+    func update(_ progress: PolishProgress, run: Int) {
+        guard run == self.run else { return }
+        if let current = self.progress, progress.completed < current.completed || progress.total < current.total { return }
+        self.progress = progress
+    }
+
+    /// What the loading state says: the part being worked on when the draft has more than one.
+    var loadingTitle: String {
+        guard let progress, progress.total > 1 else { return "Polishing…" }
+        return "Polishing… part \(min(progress.completed + 1, progress.total)) of \(progress.total)"
     }
 
     /// Tab regenerates in the next tone; not after an error, and not while editing (Tab types there).

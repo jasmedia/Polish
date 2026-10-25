@@ -87,17 +87,48 @@ struct PipelineTests {
         #expect(model.requests.map(\.prompt) == ["todo for the sprint:\n- fix the bug"])
     }
 
-    @Test func mergedLinesAreRewrittenLineByLine() async throws {
+    @Test func mergedLinesAreRewrittenByParagraph() async throws {
         let model = ScriptedModel([.text("Todo for the sprint: fix the bug ⟦T1⟧ ⟦T2⟧ thanks all")])
-        let draft = "todo for the sprint:\n- fix the bug\n\n```\nmake test\n```\n:tada:\nthanks all"
+        let draft = "todo for the sprint:\n- fix the bug\n\n```\nmake test\n```\n:tada:\n\nthanks all"
         let result = try await Pipeline(model: model).polish(text: draft, tone: .casual)
-        // The code block and emoji lines have no words, so only three lines go back to the model.
-        #expect(model.requests.map(\.prompt).dropFirst() == ["todo for the sprint:", "- fix the bug", "thanks all"])
-        #expect(model.requests.map(\.temperature) == [0.2, 0.2, 0.2, 0.2])
+        // The code block and emoji paragraph has no words, so it isn't sent.
+        #expect(model.requests.map(\.prompt).dropFirst() == ["todo for the sprint:\n- fix the bug", "thanks all"])
         // Three words or fewer: Keep my tone, since short lines restyled alone invent text.
-        #expect(model.requests.map { $0.instructions.contains("Tone: casual") } == [true, true, true, false])
-        #expect(result.trace.chunks[0].splitByLine)
+        #expect(model.requests.map { $0.instructions.contains("Tone: casual") } == [true, true, false])
+        #expect(result.trace.chunks[0].splitAfterMerge)
         #expect(result.text == draft)
+    }
+
+    @Test func aParagraphThatMergesAgainGoesLineByLine() async throws {
+        let model = ScriptedModel([
+            .text("Todo for the sprint: fix the bug. Thanks all"),
+            .text("Todo for the sprint: fix the bug"),
+        ])
+        let draft = "todo for the sprint:\n- fix the bug\n\nthanks all"
+        _ = try await Pipeline(model: model).polish(text: draft, tone: .casual)
+        #expect(model.requests.map(\.prompt) == [
+            draft, "todo for the sprint:\n- fix the bug", "todo for the sprint:", "- fix the bug", "thanks all",
+        ])
+        #expect(model.requests.map(\.temperature).allSatisfy { $0 == 0.2 })
+    }
+
+    @Test func reportsProgressAsPartsFinish() async throws {
+        let model = ScriptedModel([.text("Todo for the sprint: fix the bug ⟦T1⟧ ⟦T2⟧ thanks all")])
+        let draft = "todo for the sprint:\n- fix the bug\n\n```\nmake test\n```\n:tada:\n\nthanks all"
+        let events = Mutex<[PolishProgress]>([])
+        _ = try await Pipeline(model: model).polish(text: draft, tone: .casual) { progress in
+            events.withLock { $0.append(progress) }
+        }
+        // One part until the merge, then the two paragraphs with words.
+        #expect(events.withLock { $0 }.map { [$0.completed, $0.total] } == [[0, 1], [0, 2], [1, 2], [2, 2]])
+    }
+
+    @Test func shortDraftIsOnePart() async throws {
+        let events = Mutex<[PolishProgress]>([])
+        _ = try await Pipeline(model: ScriptedModel([])).polish(text: "i will send it tmrw") { progress in
+            events.withLock { $0.append(progress) }
+        }
+        #expect(events.withLock { $0 } == [PolishProgress(completed: 0, total: 1), PolishProgress(completed: 1, total: 1)])
     }
 
     @Test func keepSendsLinesTogether() async throws {

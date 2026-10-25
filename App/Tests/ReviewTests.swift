@@ -53,4 +53,28 @@ struct ReviewTests {
         let point = PanelPlacement.topLeft(anchor: nil, mouse: CGPoint(x: 500, y: 600), size: size, screens: screens, primaryHeight: 1000)
         #expect(point == CGPoint(x: 500, y: 584))
     }
+
+    @Test func progressShowsThePartBeingPolished() {
+        let review = ReviewModel()
+        let run = review.startRun()
+        #expect(review.loadingTitle == "Polishing…")
+        review.update(PolishProgress(completed: 0, total: 1), run: run)
+        #expect(review.loadingTitle == "Polishing…")
+        review.update(PolishProgress(completed: 1, total: 4), run: run)
+        #expect(review.loadingTitle == "Polishing… part 2 of 4")
+        // An older report arriving late doesn't move it back.
+        review.update(PolishProgress(completed: 0, total: 4), run: run)
+        #expect(review.progress == PolishProgress(completed: 1, total: 4))
+    }
+
+    @Test func reportsFromAnEarlierRunAreDropped() {
+        let review = ReviewModel()
+        let first = review.startRun()
+        review.update(PolishProgress(completed: 1, total: 3), run: first)
+        let second = review.startRun()
+        review.update(PolishProgress(completed: 2, total: 3), run: first)
+        #expect(review.progress == nil)
+        review.update(PolishProgress(completed: 0, total: 1), run: second)
+        #expect(review.progress == PolishProgress(completed: 0, total: 1))
+    }
 }

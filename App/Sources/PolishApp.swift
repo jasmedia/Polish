@@ -30,6 +30,8 @@ final class AppModel {
 
     init() {
         let pipeline = Pipeline()
+        pipeline.dictionary = settings.dictionary
+        settings.onDictionaryChange = { pipeline.dictionary = $0 }
         controller = PolishController(bridge: AccessibilityBridge(), pipeline: pipeline, presenter: presenter,
                                       defaultTone: { [settings] in settings.tone })
         presenter.controller = controller

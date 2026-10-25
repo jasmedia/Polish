@@ -11,6 +11,9 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape") {
                 GeneralSettingsView(settings: settings)
             }
+            Tab("Dictionary", systemImage: "character.book.closed") {
+                DictionarySettingsView(settings: settings)
+            }
             Tab("Permissions", systemImage: "lock.shield") {
                 PermissionsSettingsView(status: status)
             }
@@ -38,6 +41,74 @@ private struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Words and names Polish never changes (FR-11).
+private struct DictionarySettingsView: View {
+    let settings: SettingsStore
+    @State private var entry = ""
+    @State private var problem: SettingsStore.DictionaryEntryProblem?
+    @State private var selection: Set<String> = []
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Words and names Polish never changes, such as product names, people's names and team jargon. Matching is exact, including capitals.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                TextField("Add a word or name", text: $entry)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($fieldFocused)
+                    .onSubmit(add)
+                    .onChange(of: entry) { problem = nil }
+                Button("Add", action: add)
+                    .disabled(entry.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if let problem {
+                Text(problem.message)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            List(settings.dictionary, id: \.self, selection: $selection) { word in
+                Text(word)
+            }
+            .listStyle(.bordered(alternatesRowBackgrounds: true))
+            .frame(height: 180)
+            .overlay {
+                if settings.dictionary.isEmpty {
+                    Text("No words yet")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .onDeleteCommand(perform: remove)
+            .accessibilityLabel("Dictionary entries")
+            HStack {
+                Button("Remove", action: remove)
+                    .disabled(selection.isEmpty)
+                    .help("Remove the selected entries (Delete)")
+                Spacer()
+                Text(settings.dictionary.count == 1 ? "1 entry" : "\(settings.dictionary.count) entries")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(20)
+    }
+
+    private func add() {
+        problem = settings.addDictionaryEntry(entry)
+        if problem == nil {
+            entry = ""
+        }
+        fieldFocused = true
+    }
+
+    private func remove() {
+        settings.removeDictionaryEntries(selection)
+        selection = []
     }
 }
 

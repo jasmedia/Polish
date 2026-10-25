@@ -41,19 +41,26 @@ public struct Protector: Sendable {
         let source = text as NSString
 
         var spans: [NSRange] = []
+        var mentionStarts: Set<Int> = []
         var position = 0
         while let match = Self.token.firstMatch(in: text, from: position) {
             var span = match.range
             if match.didMatch(group: "mention") {
                 span.length = (Self.trimMention(source.substring(with: span)) as NSString).length
+                mentionStarts.insert(span.location)
             }
             spans.append(span)
             position = span.location + span.length
         }
 
         if let dictionaryPattern = Self.dictionaryPattern(dictionary) {
-            for match in dictionaryPattern.matches(in: text)
-            where !spans.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+            for match in dictionaryPattern.matches(in: text) {
+                let overlapping = spans.filter { NSIntersectionRange($0, match.range).length > 0 }
+                // A dictionary name after @ replaces the shorter mention the heuristic found there
+                // (`@de la Cruz`, not `@de`); any other overlap keeps the Slack token.
+                guard overlapping.allSatisfy({ $0.location == match.range.location && mentionStarts.contains($0.location) })
+                else { continue }
+                spans.removeAll { overlapping.contains($0) }
                 spans.append(match.range)
             }
             spans.sort { ($0.location, $0.length) < ($1.location, $1.length) }
@@ -115,6 +122,6 @@ public struct Protector: Sendable {
     private static func dictionaryPattern(_ words: [String]) -> Pattern? {
         guard !words.isEmpty else { return nil }
         let alternatives = words.sorted { $0.count > $1.count }.map(Pattern.escaped).joined(separator: "|")
-        return Pattern(#"(?<![\w@#])(?:"# + alternatives + #")(?!\w)"#)
+        return Pattern(#"(?<![\w@#])@?(?:"# + alternatives + #")(?!\w)"#)
     }
 }

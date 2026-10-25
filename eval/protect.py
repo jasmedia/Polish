@@ -58,7 +58,7 @@ def _dictionary_pattern(words: list[str]) -> re.Pattern | None:
     if not words:
         return None
     alts = "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True))
-    return re.compile(rf"(?<![\w@#])(?:{alts})(?!\w)")
+    return re.compile(rf"(?<![\w@#])@?(?:{alts})(?!\w)")
 
 
 def protect(text: str, dictionary: list[str] | None = None) -> Protected:
@@ -66,18 +66,24 @@ def protect(text: str, dictionary: list[str] | None = None) -> Protected:
         raise ValueError("input already contains a ⟦Tn⟧ placeholder")
 
     spans: list[tuple[int, int]] = []
+    mention_starts: set[int] = set()
     pos = 0
     while (m := _TOKEN.search(text, pos)) is not None:
         start, end = m.span()
         kind = m.lastgroup
         if kind == "mention":
             end = start + len(_trim_mention(m.group()))
+            mention_starts.add(start)
         spans.append((start, end))
         pos = end
 
     if (dict_re := _dictionary_pattern(dictionary or [])) is not None:
         for m in dict_re.finditer(text):
-            if not any(s < m.end() and m.start() < e for s, e in spans):
+            overlapping = [(s, e) for s, e in spans if s < m.end() and m.start() < e]
+            # A dictionary name after @ replaces the shorter mention the heuristic found there
+            # (`@de la Cruz`, not `@de`); any other overlap keeps the Slack token.
+            if all(s == m.start() and s in mention_starts for s, _ in overlapping):
+                spans = [span for span in spans if span not in overlapping]
                 spans.append(m.span())
         spans.sort()
 

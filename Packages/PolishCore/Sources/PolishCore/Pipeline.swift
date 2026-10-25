@@ -58,7 +58,7 @@ public final class Pipeline: Sendable {
     }
 
     private let model: any RewriteModel
-    private let protector: Protector
+    private let dictionaryWords: Mutex<[String]>
     private let instructions: InstructionsBuilder
     private let configuration: Configuration
     /// Input budget in tokens per (tone, change list) pair, computed once from the model's context size.
@@ -71,9 +71,16 @@ public final class Pipeline: Sendable {
         configuration: Configuration = Configuration()
     ) {
         self.model = model
-        protector = Protector(dictionary: dictionary)
+        dictionaryWords = Mutex(dictionary)
         self.instructions = instructions
         self.configuration = configuration
+    }
+
+    /// Personal dictionary words (FR-11), protected like Slack tokens so the model never changes them.
+    /// Settable while the app runs; the next polish uses the new list.
+    public var dictionary: [String] {
+        get { dictionaryWords.withLock { $0 } }
+        set { dictionaryWords.withLock { $0 = newValue } }
     }
 
     /// Call when the hotkey is pressed, before the text is read, to hide model load time.
@@ -101,7 +108,7 @@ public final class Pipeline: Sendable {
 
         let protected: ProtectedText
         do {
-            protected = try protector.protect(original)
+            protected = try Protector(dictionary: dictionary).protect(original)
         } catch {
             throw PolishError.unsupportedText
         }

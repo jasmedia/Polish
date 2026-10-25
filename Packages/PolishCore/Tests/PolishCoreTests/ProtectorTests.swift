@@ -56,6 +56,17 @@ struct ProtectorTests {
         #expect(protected.tokens == ["@Ana", "de la Cruz", "de la Cruz"])
     }
 
+    @Test func dictionaryNameAfterAtReplacesTheShorterMention() throws {
+        let protected = try Protector(dictionary: ["de la Cruz"]).protect("@de la Cruz can you check, thanks @Ana")
+        #expect(protected.tokens == ["@de la Cruz", "@Ana"])
+        #expect(protected.restore(protected.text) == "@de la Cruz can you check, thanks @Ana")
+    }
+
+    @Test func dictionaryWordInsideAMentionOrLinkStaysInIt() throws {
+        let protected = try Protector(dictionary: ["Cruz"]).protect("@Ana Cruz see https://example.com/Cruz")
+        #expect(protected.tokens == ["@Ana Cruz", "https://example.com/Cruz"])
+    }
+
     @Test func refusesTextWithPlaceholders() {
         #expect(throws: ProtectorError.containsPlaceholder) { try Protector().protect("a ⟦T1⟧ b") }
     }

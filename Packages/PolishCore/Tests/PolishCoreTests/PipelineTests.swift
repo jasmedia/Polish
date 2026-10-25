@@ -148,6 +148,19 @@ struct PipelineTests {
         #expect(Pipeline.displayable(partial) == shown)
     }
 
+    @Test func dictionaryWordsNeverReachTheModel() async throws {
+        let model = ScriptedModel([.text("Ask ⟦T1⟧ about the deploy."), .text("Ask Kubeflo about the deploy.")])
+        let pipeline = Pipeline(model: model)
+        pipeline.dictionary = ["Kubeflo"]
+        let result = try await pipeline.polish(text: "ask Kubeflo abt the deploy")
+        #expect(model.requests[0].prompt == "ask ⟦T1⟧ abt the deploy")
+        #expect(result.text == "Ask Kubeflo about the deploy.")
+
+        pipeline.dictionary = []
+        _ = try await pipeline.polish(text: "ask Kubeflo abt the deploy")
+        #expect(model.requests[1].prompt == "ask Kubeflo abt the deploy")
+    }
+
     @Test func shortDraftIsOnePart() async throws {
         let events = Mutex<[PolishProgress]>([])
         _ = try await Pipeline(model: ScriptedModel([])).polish(text: "i will send it tmrw") { progress in

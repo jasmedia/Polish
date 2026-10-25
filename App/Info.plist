@@ -8,6 +8,8 @@
 	<string>Polish</string>
 	<key>CFBundleExecutable</key>
 	<string>Polish</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.jasmedia.polish</string>
 	<key>CFBundleInfoDictionaryVersion</key>

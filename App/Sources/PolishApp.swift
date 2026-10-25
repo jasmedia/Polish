@@ -8,7 +8,8 @@ struct PolishApp: App {
     @State private var app = AppModel()
 
     var body: some Scene {
-        MenuBarExtra("Polish", systemImage: "text.badge.checkmark") {
+        // A template symbol, so the menu bar tints it; it echoes the app icon's bubble and check mark.
+        MenuBarExtra("Polish", systemImage: "checkmark.bubble") {
             MenuContent(app: app)
         }
         Settings {

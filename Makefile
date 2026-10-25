@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SUBSYSTEM := com.jasmedia.polish
 
-.PHONY: help build app run test test-core test-app logs eval-setup eval-swift check-model clean
+.PHONY: help build app run test test-core test-app logs eval-setup eval-swift check-model icon release clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -36,6 +36,12 @@ eval-swift: ## Golden set through the Swift pipeline (polish-cli), writes eval/r
 check-model: ## Smoke-test the on-device model via fm and the Python SDK
 	fm respond "Reply with the single word: ready"
 	uv run --project eval python eval/check_model.py
+
+icon: ## Redraw App/Resources/AppIcon.icns (scripts/make-icon.swift)
+	swift scripts/make-icon.swift
+
+release: ## Developer ID build, notarized and stapled, in a DMG (SKIP_NOTARIZE=1 to skip notarytool)
+	scripts/release.sh
 
 clean: ## Remove build products
 	swift package clean

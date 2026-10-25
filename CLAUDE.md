@@ -21,6 +21,8 @@ make test         # PolishCore + app tests
 make test-core    # swift test --package-path Packages/PolishCore
 make test-app     # swift test (root package)
 make app          # bundle only; CONFIG=release make app for release
+make icon         # redraw App/Resources/AppIcon.icns from scripts/make-icon.swift
+make release      # Developer ID build, notarized, stapled, in a DMG (setup steps in scripts/release.sh)
 make logs         # log stream for subsystem com.jasmedia.polish
 make eval-setup   # uv sync --project eval
 make check-model  # fm + Python SDK smoke test
@@ -43,7 +45,7 @@ There is **no Xcode project**. The app is a SwiftPM executable (`Package.swift`,
 | `eval/` | Python evaluation with `apple-fm-sdk` (uv project, macOS only) |
 | `golden/golden.jsonl` | Golden test set shared by Python and Swift evals; schema in `golden/README.md` |
 | `prompts/` | Versioned model instructions; `{tone}` and `{placeholders}` are template slots. `{placeholders}` gets the placeholder rule (naming each `⟦Tn⟧`, plus a keep-at-start line when the draft opens with a placeholder) only when the draft has placeholders; otherwise the model invents `⟦T1⟧`. Rule texts: `PLACEHOLDER_RULE`, `LEADING_MENTION_RULE`, `LEADING_RULE` in `eval/run.py`, mirrored in `InstructionsBuilder` (PolishCore); `Prompt.v1` must equal `prompts/v1.txt` and `Prompt.v2` the v2 files (tests check) |
-| `scripts/` | `bundle.sh`, `run.sh`, `bootstrap.sh` |
+| `scripts/` | `bundle.sh`, `run.sh`, `bootstrap.sh`, `release.sh` (notarized DMG), `make-icon.swift` (draws the app icon; the `.icns` in `App/Resources` is committed) |
 
 ## Rewrite pipeline (PolishCore)
 

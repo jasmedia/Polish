@@ -24,6 +24,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Polish" "$APP/Contents/MacOS/Polish"
 cp App/Info.plist "$APP/Contents/Info.plist"
+cp App/Resources/AppIcon.icns "$APP/Contents/Resources/"  # drawn by scripts/make-icon.swift
 
 # SwiftPM resource bundles (e.g. from dependencies) go in Contents/Resources,
 # where the generated Bundle.module accessor looks via Bundle.main.resourceURL.

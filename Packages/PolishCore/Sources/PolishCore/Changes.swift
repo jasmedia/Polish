@@ -69,7 +69,7 @@ extension Differ {
         if fromLetters.lowercased() == toLetters.lowercased() { return .capitalization }
         let old = fromLetters.lowercased()
         let new = toLetters.lowercased()
-        if !old.isEmpty, old.filter { $0 != " " } == new.filter { $0 != " " } { return .spelling }
+        if !old.isEmpty, old.filter({ $0 != " " }) == new.filter({ $0 != " " }) { return .spelling }
         if shorthand.contains(old) { return .shorthand }
         // Several words, or words only added or removed: there's no one word to compare.
         guard !old.isEmpty, !new.isEmpty, !old.contains(" "), !new.contains(" ") else {

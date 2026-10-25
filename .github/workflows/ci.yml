@@ -14,7 +14,7 @@ jobs:
     name: Build and test
     runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Toolchain
         run: swift --version
       # On-device model tests skip themselves: Apple Intelligence isn't available on CI runners.

@@ -42,6 +42,8 @@ public enum PolishError: Error, Equatable, Sendable {
     }
 
     /// Maps an error thrown by Foundation Models. Returns nil for errors that aren't the model's (cancellation).
+    /// Still matches the deprecated `GenerationError` on purpose, hence the silenced warning.
+    @diagnose(DeprecatedDeclaration, as: ignored)
     init?(modelError error: any Error) {
         switch error {
         case is CancellationError:

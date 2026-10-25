@@ -14,7 +14,9 @@ struct ReviewPanelTests {
                                           presenter: presenter)
         let review = ReviewModel()
         let panel = ReviewPanel(content: ReviewView(model: review, controller: controller))
-        panel.setFrameTopLeftPoint(CGPoint(x: 200, y: 800))
+        // Inside the screen: AppKit moves a panel that sits above it (CI's screen is 768 points tall).
+        let visible = try #require(NSScreen.main?.visibleFrame)
+        panel.setFrameTopLeftPoint(CGPoint(x: visible.minX + 100, y: visible.maxY - 50))
         panel.orderFront(nil)
         let top = panel.frame.maxY
         let loadingHeight = panel.frame.height

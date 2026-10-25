@@ -41,6 +41,11 @@ final class PolishController {
         start { try $0.readClipboard() }
     }
 
+    /// Services › Polish Text (FR-10, Flow C): the same review panel as the hotkey.
+    func polishServiceText(_ text: String) {
+        start { try $0.readService(text) }
+    }
+
     func accept() {
         guard let review, let draft, let text = review.acceptedText else { return }
         dismiss()

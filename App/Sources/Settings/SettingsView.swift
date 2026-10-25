@@ -28,6 +28,7 @@ private struct GeneralSettingsView: View {
     var body: some View {
         Form {
             KeyboardShortcuts.Recorder("Polish shortcut:", name: .polish)
+            KeyboardShortcuts.Recorder("Quick Polish shortcut:", name: .quickPolish)
             TonePicker(tone: $settings.tone, title: "Default tone")
             Toggle("Launch at login", isOn: Binding(
                 get: { settings.launchAtLogin },

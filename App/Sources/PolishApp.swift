@@ -26,17 +26,25 @@ final class AppModel {
     let controller: PolishController
     @ObservationIgnored private let presenter = ReviewPanelPresenter()
     @ObservationIgnored private var onboarding: OnboardingWindowController?
+    @ObservationIgnored private let quickWindow: QuickWindowController
+    @ObservationIgnored private let services: ServiceProvider
     @ObservationIgnored private var hotkeyTask: Task<Void, Never>?
+    @ObservationIgnored private var quickHotkeyTask: Task<Void, Never>?
 
     init() {
         let pipeline = Pipeline()
         pipeline.dictionary = settings.dictionary
         settings.onDictionaryChange = { pipeline.dictionary = $0 }
-        controller = PolishController(bridge: AccessibilityBridge(), pipeline: pipeline, presenter: presenter,
+        let bridge = AccessibilityBridge()
+        controller = PolishController(bridge: bridge, pipeline: pipeline, presenter: presenter,
                                       defaultTone: { [settings] in settings.tone })
         presenter.controller = controller
         status = ModelStatusModel(updates: ModelAvailability.updates())
         status.onChange = { [controller] in controller.modelStatusChanged($0) }
+        quickWindow = QuickWindowController(model: QuickWindowModel(
+            pipeline: pipeline, tone: settings.tone, copy: { bridge.copyToClipboard($0) }
+        ))
+        services = ServiceProvider { [controller] in controller.polishServiceText($0) }
         let onboardingModel = OnboardingModel(pipeline: pipeline)
         onboarding = OnboardingWindowController(
             makeView: { [status] done in
@@ -44,15 +52,26 @@ final class AppModel {
             },
             onFinish: { [settings] in settings.hasCompletedOnboarding = true }
         )
-        if !settings.hasCompletedOnboarding {
-            // After launch finishes; the app can't activate or show windows from inside App.init.
-            Task { [weak self] in self?.showOnboarding() }
+        // After launch finishes; the app can't activate or show windows from inside App.init.
+        Task { [weak self, services] in
+            NSApplication.shared.servicesProvider = services
+            NSUpdateDynamicServices()
+            if self?.settings.hasCompletedOnboarding == false { self?.showOnboarding() }
         }
         hotkeyTask = Task { [controller] in
             for await _ in KeyboardShortcuts.events(.keyUp, for: .polish) {
                 controller.polishFocusedField()
             }
         }
+        quickHotkeyTask = Task { [quickWindow] in
+            for await _ in KeyboardShortcuts.events(.keyUp, for: .quickPolish) {
+                quickWindow.show()
+            }
+        }
+    }
+
+    func showQuickWindow() {
+        quickWindow.show()
     }
 
     func showOnboarding() {
@@ -69,6 +88,9 @@ private struct MenuContent: View {
         Divider()
         Button("Polish Clipboard") {
             app.controller.polishClipboard()
+        }
+        Button("Quick Polish…") {
+            app.showQuickWindow()
         }
         @Bindable var settings = app.settings
         TonePicker(tone: $settings.tone, title: "Tone")

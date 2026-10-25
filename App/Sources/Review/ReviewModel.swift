@@ -2,6 +2,14 @@ import Foundation
 import Observation
 import PolishCore
 
+extension PolishProgress {
+    /// "Polishing…", or the part being worked on when the text has more than one (FR-12).
+    static func title(_ progress: PolishProgress?) -> String {
+        guard let progress, progress.total > 1 else { return "Polishing…" }
+        return "Polishing… part \(min(progress.completed + 1, progress.total)) of \(progress.total)"
+    }
+}
+
 /// What the review panel shows for one hotkey press (FR-5).
 @MainActor
 @Observable
@@ -87,8 +95,7 @@ final class ReviewModel {
 
     /// What the loading state says: the part being worked on when the draft has more than one.
     var loadingTitle: String {
-        guard let progress, progress.total > 1 else { return "Polishing…" }
-        return "Polishing… part \(min(progress.completed + 1, progress.total)) of \(progress.total)"
+        PolishProgress.title(progress)
     }
 
     /// Tab regenerates in the next tone; not after an error, and not while editing (Tab types there).

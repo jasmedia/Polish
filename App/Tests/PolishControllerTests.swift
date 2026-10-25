@@ -46,6 +46,9 @@ final class FakeBridge: TextBridging {
 
     func readFocusedField() async throws -> Draft { try draft.get() }
     func readClipboard() throws -> Draft { try draft.get() }
+    func readService(_ text: String) throws -> Draft {
+        Draft(text: text, source: .focusedField, processID: 1)
+    }
 
     func replace(_ draft: Draft, with text: String) async throws {
         if let replaceError { throw replaceError }
@@ -230,5 +233,18 @@ struct PolishControllerTests {
 
     @Test func toneCyclesThroughAllAndWraps() {
         #expect(Tone.allCases.map(\.next) == [.casual, .professional, .concise, .keep])
+    }
+
+    @Test func servicesTextGoesThroughTheReviewPanel() async {
+        let bridge = FakeBridge("")
+        let controller = controller(bridge, FixedModel(["I will send the report tomorrow."]))
+        controller.polishServiceText("i will send the report tmrw")
+        await controller.work?.value
+        #expect(presenter.isOpen)
+        #expect(bridge.replaced.isEmpty)
+
+        controller.accept()
+        await controller.work?.value
+        #expect(bridge.replaced == ["I will send the report tomorrow."])
     }
 }

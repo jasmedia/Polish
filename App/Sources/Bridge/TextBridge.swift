@@ -43,6 +43,8 @@ enum BridgeError: Error, Equatable {
 protocol TextBridging: AnyObject {
     func readFocusedField() async throws -> Draft
     func readClipboard() throws -> Draft
+    /// The selection a Services request (FR-10, Flow C) handed over, tied to the app in front.
+    func readService(_ text: String) throws -> Draft
     /// Puts `text` in place of the draft: the selection in its app, or the clipboard.
     func replace(_ draft: Draft, with text: String) async throws
     func copyToClipboard(_ text: String)
@@ -53,6 +55,26 @@ protocol TextBridging: AnyObject {
 @MainActor
 final class AccessibilityBridge: TextBridging {
     private let pasteboard = NSPasteboard.general
+    /// The last app other than Polish to come to the front. A Services request can bring Polish to the
+    /// front while it's handled, so this is the app the selection came from.
+    private var lastOtherApp: NSRunningApplication?
+    private var activationObserver: NSObjectProtocol?
+
+    init() {
+        lastOtherApp = NSWorkspace.shared.frontmostApplication.flatMap(Self.other)
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated {
+                if let app = app.flatMap(Self.other) { self?.lastOtherApp = app }
+            }
+        }
+    }
+
+    nonisolated private static func other(_ app: NSRunningApplication) -> NSRunningApplication? {
+        app.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : app
+    }
 
     func readFocusedField() async throws -> Draft {
         guard Accessibility.isTrusted else { throw BridgeError.notTrusted }
@@ -96,11 +118,24 @@ final class AccessibilityBridge: TextBridging {
         return Draft(text: text, source: .clipboard)
     }
 
+    func readService(_ text: String) throws -> Draft {
+        // Putting the rewrite back needs Accessibility or synthetic ⌘V, the same as the hotkey.
+        guard Accessibility.isTrusted else { throw BridgeError.notTrusted }
+        guard !text.isBlank,
+              let app = NSWorkspace.shared.frontmostApplication.flatMap(Self.other) ?? lastOtherApp
+        else { throw BridgeError.noText }
+        let field = AXUIElementCreateApplication(app.processIdentifier).element(kAXFocusedUIElementAttribute)
+        Log.bridge.info("Read selection from Services (\(text.count, privacy: .public) chars)")
+        return Draft(text: text, source: .focusedField, processID: app.processIdentifier, element: field,
+                     anchor: field?.selectionBounds ?? field?.frame)
+    }
+
     func replace(_ draft: Draft, with text: String) async throws {
         switch draft.source {
         case .clipboard:
             copyToClipboard(text)
         case .focusedField:
+            await bringBack(draft.processID)
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == draft.processID else {
                 throw BridgeError.targetChanged
             }
@@ -121,6 +156,18 @@ final class AccessibilityBridge: TextBridging {
     }
 
     // MARK: Steps
+
+    /// After a Services request Polish can be in front; give the draft's app the front back. Any other
+    /// app in front is left alone, and replace then refuses (`targetChanged`).
+    private func bringBack(_ processID: pid_t?) async {
+        guard NSWorkspace.shared.frontmostApplication.flatMap(Self.other) == nil, let processID,
+              let app = NSRunningApplication(processIdentifier: processID)
+        else { return }
+        app.activate()
+        for _ in 0..<15 where NSWorkspace.shared.frontmostApplication?.processIdentifier != processID {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
 
     private static func isTextField(_ element: AXUIElement) -> Bool {
         let role = element.string(kAXRoleAttribute)

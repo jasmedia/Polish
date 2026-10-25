@@ -3,7 +3,8 @@
 //   polish-cli golden [--golden PATH] [--out PATH] [--limit N] [--ids ID...] [--temperature T] [--no-keep-style]
 //                     [--tone TONE] [--tone-prompt PATH] [--two-stage]
 //   (--two-stage: polish in Keep my tone first, then restyle that result in TONE)
-//   (--tone-prompt: a prompts/vN.txt restyle template for the non-keep tones, with prompts/vN-tones/; default v1)
+//   (--tone-prompt: a prompts/vN.txt restyle template for the non-keep tones, with prompts/vN-tones/;
+//    default: what the app ships, v2 for Casual and Professional and v1 for the rest)
 //   polish-cli rewrite [--tone keep|casual|professional|concise] [--tone-prompt PATH] [--two-stage] [TEXT]   (reads stdin without TEXT)
 //
 // `golden` writes one JSON object per row with the same columns as eval/run.py, so eval/compare.py
@@ -116,7 +117,8 @@ func runGolden(_ options: Options) async throws {
     configuration.keepWriterStyle = options.keepStyle
     let instructions = try makeInstructions(options)
     let variant = options.tone == .keep ? "v1"
-        : options.tonePrompt.map { URL(filePath: $0).deletingPathExtension().lastPathComponent } ?? "v1"
+        : options.tonePrompt.map { URL(filePath: $0).deletingPathExtension().lastPathComponent }
+            ?? (Prompt.v2.tones[options.tone] == nil ? "v1" : "v2")
     let pipeline = Pipeline(instructions: instructions, configuration: configuration)
     if case .unavailable = ModelStatus.current() {
         fail("model not available: \(ModelStatus.current().menuTitle)")
@@ -174,8 +176,10 @@ func polish(_ text: String, with pipeline: Pipeline, _ options: Options) async t
     return try await pipeline.polish(text: corrected.text, tone: options.tone)
 }
 
+/// The shipped prompts, or a restyle prompt from disk for the non-keep tones.
 func makeInstructions(_ options: Options) throws -> InstructionsBuilder {
-    InstructionsBuilder(restyle: try options.tonePrompt.map { try .init(contentsOf: URL(filePath: $0)) })
+    guard let tonePrompt = options.tonePrompt else { return InstructionsBuilder() }
+    return InstructionsBuilder(restyle: try .init(contentsOf: URL(filePath: tonePrompt)))
 }
 
 func runRewrite(_ options: Options) async throws {

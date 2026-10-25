@@ -215,6 +215,8 @@ The restyle tones send each non-blank line to the model on its own (`Chunker.lin
 
 ## Split by line only after a merge (v2d, current)
 
+**Shipped 2026-10-25 for Casual and Professional** (`Prompt.v2`, the default `InstructionsBuilder`). Keep my tone and Concise stay on v1. `polish-cli` without `--tone-prompt` runs what the app ships.
+
 One call per message as before. When a restyle attempt merges lines, the pipeline skips the temperature-0 retry and rewrites the chunk line by line (`Pipeline.rewriteByLine`, `ChunkTrace.splitByLine`): lines without words stay as they are, and lines of three words or fewer get Keep my tone. Prompt v2 loses its example word lists (`PR, merge, sheet and repo`, `check, need, fix, works, demo`, filler and request examples); the shorthand list stays, since it names input forms to expand. Keep my tone is unchanged.
 
 | Metric | v2c casual | v2c prof. | v2c concise | v2d casual | v2d prof. | v2d concise |

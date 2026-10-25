@@ -42,9 +42,10 @@ struct InstructionsTests {
     @Test func restyleTemplateIsForTheOtherTonesOnly() {
         let restyle = InstructionsBuilder.Restyle(template: "Restyle. {tone}\n{placeholders}\n", tones: [.casual: "Tone: chatty."])
         let builder = InstructionsBuilder(restyle: restyle)
-        #expect(builder.build(tone: .keep, placeholders: []) == InstructionsBuilder().build(tone: .keep, placeholders: []))
+        #expect(builder.build(tone: .keep, placeholders: []) == InstructionsBuilder(restyle: nil).build(tone: .keep, placeholders: []))
         #expect(builder.build(tone: .casual, placeholders: []) == "Restyle. Tone: chatty.\n")
-        #expect(builder.build(tone: .concise, placeholders: [1]).hasPrefix("Restyle. concise: cut filler"))
+        // A tone the restyle prompt doesn't cover stays on the keep template.
+        #expect(builder.build(tone: .concise, placeholders: []) == InstructionsBuilder(restyle: nil).build(tone: .concise, placeholders: []))
     }
 
     @Test func loadsAPromptVersionWithItsToneTexts() throws {
@@ -52,5 +53,21 @@ struct InstructionsTests {
         #expect(restyle.template.contains("{tone}"))
         #expect(Set(restyle.tones.keys) == [.casual, .professional, .concise])
         #expect(restyle.tones.values.allSatisfy { $0.hasPrefix("Tone: ") && !$0.hasSuffix("\n") })
+    }
+
+    @Test func v2MatchesItsPromptFiles() throws {
+        let files = try InstructionsBuilder.Restyle(contentsOf: Golden.repoRoot.appending(path: "prompts/v2.txt"))
+        #expect(Prompt.v2.template == files.template)
+        #expect(Prompt.v2.tones[.casual] == files.tones[.casual])
+        #expect(Prompt.v2.tones[.professional] == files.tones[.professional])
+    }
+
+    @Test func shipsV2ForCasualAndProfessionalOnly() {
+        let builder = InstructionsBuilder()
+        let v1 = InstructionsBuilder(restyle: nil)
+        #expect(builder.build(tone: .keep, placeholders: []) == v1.build(tone: .keep, placeholders: []))
+        #expect(builder.build(tone: .concise, placeholders: []) == v1.build(tone: .concise, placeholders: []))
+        #expect(builder.build(tone: .casual, placeholders: []).hasPrefix("You rewrite a Slack message that was typed quickly and may contain mistakes. The writer"))
+        #expect(builder.build(tone: .professional, placeholders: []).contains("Tone: professional and polite"))
     }
 }

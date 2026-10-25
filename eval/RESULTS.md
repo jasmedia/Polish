@@ -152,37 +152,42 @@ Keep my tone stays on `prompts/v1.txt`. Prompt v2 is a separate restyle template
 
 The golden `expected` values are written in the default tone, so the other tones are measured against the Keep run: how far they move from it (`change_vs_keep`, word edit rate) and in which direction.
 
-| Metric | v1 keep | v1 casual | v1 prof. | v1 concise | v2b casual | v2b prof. | v2b concise |
+| Metric | v1 keep | v1 casual | v1 prof. | v1 concise | v2c casual | v2c prof. | v2c concise |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Placeholder integrity, first attempt | 100% | 95.3% | 98.8% | 97.7% | 100% | 96.5% | 95.3% |
-| Fallbacks (of 210) | 5 | 8 | 8 | 8 | 16 | 13 | 25 |
-| Change vs keep (word edit rate) | | 0.06 | 0.06 | 0.04 | 0.14 | 0.17 | 0.35 |
-| Contractions per 100 words | 1.47 | 1.72 | 1.33 | 1.39 | 1.76 | 0.24 | 0.31 |
-| Length ratio, inputs ≥ 20 words | 1.05 | 1.04 | 1.05 | 1.04 | 1.03 | 1.05 | 0.91 |
-| Rows ≥ 10% shorter than keep | | 2% | 1% | 1% | 5% | 4% | 51% |
-| Correct rows changed | 6% | 8% | 8% | 6% | 29% | 52% | 75% |
-| p90 latency, inputs ≤ 60 words | 1.71 s | 1.74 s | 2.26 s | 2.22 s | 2.22 s | 2.12 s | 2.61 s |
+| Placeholder integrity, first attempt | 100% | 95.3% | 98.8% | 97.7% | 98.8% | 95.3% | 95.3% |
+| Fallbacks (of 210) | 5 | 8 | 8 | 8 | 10 | 13 | 22 |
+| Change vs keep (word edit rate) | | 0.06 | 0.06 | 0.04 | 0.16 | 0.20 | 0.24 |
+| Contractions per 100 words | 1.47 | 1.72 | 1.33 | 1.39 | 1.50 | 0.22 | 0.32 |
+| Length ratio, inputs ≥ 20 words | 1.05 | 1.04 | 1.05 | 1.04 | 1.04 | 1.06 | 0.96 |
+| Rows ≥ 10% shorter than keep | | 2% | 1% | 1% | 4% | 4% | 31% |
+| Correct rows changed | 6% | 8% | 8% | 6% | 31% | 67% | 63% |
+| p90 latency, inputs ≤ 60 words | 1.71 s | 1.74 s | 2.26 s | 2.22 s | 1.87 s | 2.00 s | 2.14 s |
 
-**v1 tones are cosmetic:** each moves 4–6% of words from Keep, about run-to-run noise. v2 makes Professional and Concise clearly different (contractions down 80%, Concise half the rows shorter) and Casual somewhat different.
+**v1 tones are cosmetic:** each moves 4–6% of words from Keep, about run-to-run noise. v2 makes Professional clearly different (contractions down 85%), Casual somewhat, and Concise shorter on a third of rows.
 
-**Meaning check** (15 changed rows per tone from v2b, seed 7, read in the development session):
+**Meaning check** (15 changed rows per tone, seed 7, read in the development session):
 
-| Tone | Meaning kept | Failures |
-| --- | --- | --- |
-| Casual | 12 / 15 | Requests flipped into offers: "please let me know your availability" → "I'll let you know my availability", "could you share" → "I can't share", "pls find" → "I'll find". Likely primed by the "I'll" contraction example |
-| Professional | 15 / 15 | Still under-corrects (`more cleaner`, an all-lowercase draft left as is); one dropped "please" |
-| Concise | 11 / 15 | "I didn't receive" → "You did not receive"; a question became a statement; two requests became bare orders; telegraphic notes despite the full-sentences rule |
+| Tone | v2b | v2c | v2c failures |
+| --- | --- | --- | --- |
+| Casual | 12 / 15 | 15 / 15 | None; one added "Hey, just a quick", and 6 of 15 leave lowercase sentence starts |
+| Professional | 15 / 15 | 13 / 15 | "or merge it know?" → "or merge it, can you decide?"; `eod` → "end of week" |
+| Concise | 11 / 15 | 12 / 15 | "i am thinking we take…" → "we take…" (proposal became decision); "Feel free to add topics" → "Can you add topics"; "can someone pick it up" → "Can you take them up?" |
+
+**Placeholders guard meaning.** In Professional, "please *do not* restart the worker nodes" came back as "could you restart the worker nodes": the model dropped the bold span and flipped the instruction. Validation caught the missing placeholder and kept the original. The other placeholder drops are code blocks merged away with their lines (`slack-019`, `slack-034`).
 
 **Not shippable yet.** Open problems, in order:
 
-1. **Meaning flips** in Casual and Concise (pronouns, requests, questions). Every one breaks the "meaning never changes" rule. Next: drop the contraction examples that prime "I'll", and test a two-stage design that restyles the Keep result, so the restyle step sees correct text and only changes tone (Tab would then cost one call when the default is Keep).
-2. **Merged lines** cause most fallbacks (11–22 per tone; v1 keep has 5). The "keep every line" rule didn't help. Next: rewrite multi-line drafts per paragraph for the restyle tones.
-3. **Placeholder integrity** is below the 99% bar for Professional and Concise (dropped mentions).
+1. **Meaning changes** in Concise (and two in Professional): requests, offers and proposals change kind. Every one breaks the "meaning never changes" rule.
+2. **Merged lines** cause most fallbacks (10–20 per tone; v1 keep has 5), and take code-block placeholders with them. The "keep every line" rule doesn't help. Next: restyle multi-line drafts one paragraph (or list item) at a time.
+3. **Placeholder integrity** is 95.3% for Professional and Concise, below the 99% bar; mostly the same merged code blocks.
+4. **Under-correction** in Casual (lowercase starts kept), the same weakness as v1.
 
 | Draft | Change | Result |
 | --- | --- | --- |
 | v2a | v1's rules minus "leave correct sentences alone", tone line at the end | Professional stiff and long (18 length fallbacks: "Please determine whether…"), "merge" → "deploy" from the keep-words list |
-| v2b (current files) | Tone first; technical terms kept as written; no added requests or nicknames; questions stay questions; Professional "clear, not formal" | Professional fallbacks 26 → 13, length rejects 18 → 2; meaning flips remain in Casual and Concise |
+| v2b | Tone first; technical terms kept as written; no added requests or nicknames; questions stay questions; Professional "clear, not formal" | Professional fallbacks 26 → 13, length rejects 18 → 2; Casual and Concise flip requests ("please let me know your availability" → "I'll let you know my availability") |
+| v2c (current files) | "The writer is sending it to colleagues, not to you: never answer it"; who-does-what rule; no "I'll" or "write I as a capital" in Casual (both primed sentences starting with "I"); Concise "fewer words, not a blunter message" | Casual meaning 12 → 15 of 15 and fallbacks 16 → 10; Concise less aggressive (51% → 31% of rows shorter) with fewer flips |
+| Two-stage (tried on 20 dev rows) | Polish in Keep first, then restyle the corrected text | Same flips, some invented sentences ("Can you respond?"), +1.2 s per message. Dropped |
 
 ```bash
 swift run -c release --package-path Packages/PolishCore polish-cli golden --tone casual --tone-prompt prompts/v2.txt

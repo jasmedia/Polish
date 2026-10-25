@@ -55,14 +55,27 @@ public enum Chunker {
     }
 
     private static let paragraphBreak = Pattern(#"\n(?:[ \t]*\n)+"#)
+    private static let lineBreak = Pattern(#"\n(?:[ \t]*\n)*"#)
     private static let sentenceEnd = Pattern(#"[.!?]+["'’”)\]]*\s+"#)
 
     /// Paragraphs separated by one or more blank lines; the blank lines become the separator.
     static func paragraphs(_ text: String) -> [Chunk] {
+        pieces(of: text, separatedBy: paragraphBreak)
+    }
+
+    /// Each non-blank line of a chunk on its own, for the restyle tones: the model merges lines it sees
+    /// together (FR-8). The line break and any blank lines after a line become its separator.
+    public static func lines(_ chunk: Chunk) -> [Chunk] {
+        var pieces = pieces(of: chunk.text, separatedBy: lineBreak)
+        pieces[pieces.count - 1].separator += chunk.separator
+        return pieces
+    }
+
+    private static func pieces(of text: String, separatedBy breakPattern: Pattern) -> [Chunk] {
         let source = text as NSString
         var pieces: [Chunk] = []
         var last = 0
-        for match in paragraphBreak.matches(in: text) {
+        for match in breakPattern.matches(in: text) {
             pieces.append(Chunk(
                 text: source.substring(with: NSRange(location: last, length: match.range.location - last)),
                 separator: source.substring(with: match.range)

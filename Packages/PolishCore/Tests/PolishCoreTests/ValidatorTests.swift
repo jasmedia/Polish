@@ -43,6 +43,13 @@ struct ValidatorTests {
         #expect(Validator().validate(output, source: "hello there") == [.empty])
     }
 
+    @Test func rejectsEchoedFormatPrompt() {
+        let source = "Retro notes from the project, posting here so people can catch up."
+        let output = "Retro notes from the project, posting here so people can catch up. Respond using the following JSON format: {"
+        #expect(Validator().validate(output, source: source).contains(.leak))
+        #expect(Validator().validate("Can you send it in JSON format?", source: "can u send it in JSON format").isEmpty)
+    }
+
     @Test func lengthLimits() {
         let source = String(repeating: "a", count: 100)
         #expect(Validator().validate(String(repeating: "a", count: 60), source: source).isEmpty)

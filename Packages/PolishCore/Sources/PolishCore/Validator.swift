@@ -12,6 +12,9 @@ public enum ValidationFailure: Equatable, Hashable, Sendable, CustomStringConver
     case length
     /// Fewer non-blank lines than the draft: lines were merged or dropped.
     case lines
+    /// The output repeats the framework's guided-generation prompt ("Respond using the following JSON
+    /// format…"). Swift only: the Python prototype never checked for it.
+    case leak
 
     public var description: String {
         switch self {
@@ -22,13 +25,14 @@ public enum ValidationFailure: Equatable, Hashable, Sendable, CustomStringConver
         case .mangled: "mangled placeholder"
         case .length: "length"
         case .lines: "lines"
+        case .leak: "leak"
         }
     }
 
     public var isPlaceholderFailure: Bool {
         switch self {
         case .missing, .duplicated, .unknown, .mangled: true
-        case .empty, .length, .lines: false
+        case .empty, .length, .lines, .leak: false
         }
     }
 }
@@ -52,12 +56,18 @@ public struct Validator: Sendable {
         if !lengthRange.contains(ratio) {
             failures.append(.length)
         }
+        if Self.leakMarkers.contains(where: { output.localizedCaseInsensitiveContains($0) && !source.localizedCaseInsensitiveContains($0) }) {
+            failures.append(.leak)
+        }
         // Line breaks are Slack syntax too (FR-4): a merged or dropped line fails, so the draft is kept.
         if Self.nonBlankLines(output) < Self.nonBlankLines(source) {
             failures.append(.lines)
         }
         return failures
     }
+
+    /// Phrases of the framework's output-format prompt that the model sometimes copies into its answer.
+    static let leakMarkers = ["Respond using the following", "JSON format"]
 
     /// Every placeholder of `source` exactly once in `output`, and no others.
     static func placeholderFailures(_ output: String, source: String) -> [ValidationFailure] {

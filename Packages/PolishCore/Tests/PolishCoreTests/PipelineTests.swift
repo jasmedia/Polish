@@ -81,6 +81,31 @@ struct PipelineTests {
         #expect(result.text == "I'll post the doc.\n\nIt is \"ready\".")
     }
 
+    @Test func otherTonesSendTheWholeDraftFirst() async throws {
+        let model = ScriptedModel([])
+        _ = try await Pipeline(model: model).polish(text: "todo for the sprint:\n- fix the bug", tone: .casual)
+        #expect(model.requests.map(\.prompt) == ["todo for the sprint:\n- fix the bug"])
+    }
+
+    @Test func mergedLinesAreRewrittenLineByLine() async throws {
+        let model = ScriptedModel([.text("Todo for the sprint: fix the bug ⟦T1⟧ ⟦T2⟧ thanks all")])
+        let draft = "todo for the sprint:\n- fix the bug\n\n```\nmake test\n```\n:tada:\nthanks all"
+        let result = try await Pipeline(model: model).polish(text: draft, tone: .casual)
+        // The code block and emoji lines have no words, so only three lines go back to the model.
+        #expect(model.requests.map(\.prompt).dropFirst() == ["todo for the sprint:", "- fix the bug", "thanks all"])
+        #expect(model.requests.map(\.temperature) == [0.2, 0.2, 0.2, 0.2])
+        // Three words or fewer: Keep my tone, since short lines restyled alone invent text.
+        #expect(model.requests.map { $0.instructions.contains("Tone: casual") } == [true, true, true, false])
+        #expect(result.trace.chunks[0].splitByLine)
+        #expect(result.text == draft)
+    }
+
+    @Test func keepSendsLinesTogether() async throws {
+        let model = ScriptedModel([])
+        _ = try await Pipeline(model: model).polish(text: "todo:\n- fix the bug\n- add tests")
+        #expect(model.requests.map(\.prompt) == ["todo:\n- fix the bug\n- add tests"])
+    }
+
     @Test func otherTonesKeepWrittenOutContractions() async throws {
         let model = ScriptedModel([.text("I will post the doc.\nIt is “ready”.")])
         let result = try await Pipeline(model: model).polish(text: "i'll post the doc\n\nits 'ready'", tone: .professional)

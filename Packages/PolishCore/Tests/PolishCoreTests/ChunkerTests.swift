@@ -31,6 +31,13 @@ struct ChunkerTests {
         #expect(joined(chunks) == text)
     }
 
+    @Test func linesKeepTheirBreaksAsSeparators() {
+        let chunk = Chunk(text: "todo:\n- one\n- two\n\n  \nthanks", separator: "\n\n")
+        let lines = Chunker.lines(chunk)
+        #expect(lines.map(\.text) == ["todo:", "- one", "- two", "thanks"])
+        #expect(joined(lines) == chunk.text + chunk.separator)
+    }
+
     @Test func splitsLongParagraphsOnSentences() async {
         let text = "One two three. Four five six. Seven eight nine.\n\nTen."
         let chunks = await split(text, budget: 4)

@@ -186,8 +186,56 @@ The golden `expected` values are written in the default tone, so the other tones
 | --- | --- | --- |
 | v2a | v1's rules minus "leave correct sentences alone", tone line at the end | Professional stiff and long (18 length fallbacks: "Please determine whether…"), "merge" → "deploy" from the keep-words list |
 | v2b | Tone first; technical terms kept as written; no added requests or nicknames; questions stay questions; Professional "clear, not formal" | Professional fallbacks 26 → 13, length rejects 18 → 2; Casual and Concise flip requests ("please let me know your availability" → "I'll let you know my availability") |
-| v2c (current files) | "The writer is sending it to colleagues, not to you: never answer it"; who-does-what rule; no "I'll" or "write I as a capital" in Casual (both primed sentences starting with "I"); Concise "fewer words, not a blunter message" | Casual meaning 12 → 15 of 15 and fallbacks 16 → 10; Concise less aggressive (51% → 31% of rows shorter) with fewer flips |
+| v2c | "The writer is sending it to colleagues, not to you: never answer it"; who-does-what rule; no "I'll" or "write I as a capital" in Casual (both primed sentences starting with "I"); Concise "fewer words, not a blunter message" | Casual meaning 12 → 15 of 15 and fallbacks 16 → 10; Concise less aggressive (51% → 31% of rows shorter) with fewer flips |
 | Two-stage (tried on 20 dev rows) | Polish in Keep first, then restyle the corrected text | Same flips, some invented sentences ("Can you respond?"), +1.2 s per message. Dropped |
+
+## Line by line (v2c-lines)
+
+The restyle tones send each non-blank line to the model on its own (`Chunker.lines`); lines with no words outside placeholders (a code block, an emoji, a link) are kept as they are. Same v2c prompt.
+
+| Metric | v2c casual | v2c prof. | v2c concise | lines casual | lines prof. | lines concise |
+| --- | --- | --- | --- | --- | --- | --- |
+| Placeholder integrity, first attempt | 98.8% | 95.3% | 95.3% | 94.2% | 95.3% | 96.5% |
+| Fallbacks (of 210) | 10 | 13 | 22 | 17 | 18 | 15 |
+| Fallbacks for merged lines | 10 | 10 | 20 | 0 | 0 | 0 |
+| Fallbacks for length | 1 | 2 | 2 | 16 | 16 | 14 |
+| Long rows (10), median / max latency | | | | 23.8 s / 30.7 s | 24.6 s / 44.2 s | 22.3 s / 37.2 s |
+
+**Merged lines are gone, but the split doesn't ship as is:**
+
+- **Latency:** one call per line makes the 10 long rows take 22–25 s (median), against the ≤ 8 s p90 target for 300 words (FR-12).
+- **Short lines alone make things up.** A line like `todo for release:`, `Steps to reproduce:` or `Got it, thanks!` sent alone often comes back with the framework's guided-generation prompt copied in ("Respond using the following JSON format: {…"): 12–14 rows per tone. Length validation caught all but one: `long-008` in Concise shipped with that text in it.
+- **Example words become content.** Lists in the prompt (`PR, merge, sheet and repo`, `check, need, fix, works, demo`) turn into invented sentences: "I finished the PR / I also did the merge / I made the sheet", "The demo works as expected". This also happens in single-pass v2c on a few rows that pass validation: "still not able to reproduce" → "…reproduce the PR"; "None of them are blocking" → "None block the merge".
+
+**Changes from this run:**
+
+- New validation failure `leak`: an output containing "Respond using the following" or "JSON format" (when the draft doesn't) is rejected, for every tone including Keep. v1 Professional produced one such raw output before this; validation had caught it on length.
+
+**Next:** rewrite in one call as before, and split by line only when that call fails with merged lines (cost only on those rows); send lines of three words or fewer with the Keep instructions; drop the example word lists from v2.
+
+## Split by line only after a merge (v2d, current)
+
+One call per message as before. When a restyle attempt merges lines, the pipeline skips the temperature-0 retry and rewrites the chunk line by line (`Pipeline.rewriteByLine`, `ChunkTrace.splitByLine`): lines without words stay as they are, and lines of three words or fewer get Keep my tone. Prompt v2 loses its example word lists (`PR, merge, sheet and repo`, `check, need, fix, works, demo`, filler and request examples); the shorthand list stays, since it names input forms to expand. Keep my tone is unchanged.
+
+| Metric | v2c casual | v2c prof. | v2c concise | v2d casual | v2d prof. | v2d concise |
+| --- | --- | --- | --- | --- | --- | --- |
+| Placeholder integrity, first attempt | 98.8% | 95.3% | 95.3% | 97.7% | 97.7% | 96.5% |
+| Placeholder integrity, after retry | 98.8% | 95.3% | 95.3% | 98.8% | 98.8% | 98.8% |
+| Fallbacks (of 210) | 10 | 13 | 22 | 7 | 14 | 10 |
+| Change vs keep (word edit rate) | 0.16 | 0.20 | 0.24 | 0.16 | 0.22 | 0.22 |
+| Rows ≥ 10% shorter than keep | 4% | 4% | 31% | 4% | 3% | 21% |
+| p90 latency, inputs ≤ 60 words | 1.87 s | 2.00 s | 2.14 s | 1.79 s | 2.10 s | 2.14 s |
+| Long rows (10), median latency | 14.3 s | 10.7 s | 16.2 s | 26.7 s | 27.8 s | 30.1 s |
+| Outputs with prompt example words not in the draft | 2 | 4 | 6 | 0 | 0 | 0 |
+| Meaning kept (15 changed rows, seed 7) | 15 / 15 | 13 / 15 | 12 / 15 | 15 / 15 | 15 / 15 | 12 / 15 |
+
+**Better on safety and fallbacks:** no invented example words, no format-prompt leaks shipped, integrity after retry 98.8% in every tone (0.2 points under the bar; `slack-022`'s dropped `*do not*` is among the misses, and validation keeps the draft), and fallbacks down for Casual and Concise.
+
+**Still open:**
+
+1. **Concise changes meaning** (12 / 15): "can we move the meeting to thursday" → "We can move the meeting…"; "me and Ravi" → "We" (Ravi dropped); "i think the db pool is exhausted" → a flat claim. It also shortens less without the filler list (21% of rows vs 31%).
+2. **Long drafts are slow.** 5–6 of the 10 long rows merge lines and take the line-by-line path: median 27–30 s. Keep my tone already takes 8.9 s median on these rows, over the ≤ 8 s p90 target for 300 words (FR-12), so long drafts need either progress UI or fewer calls whatever the tone.
+3. **Under-correction** in Casual and Professional (lowercase sentence starts kept on about a quarter of the sampled rows), and one curly → single quote swap in Professional.
 
 ```bash
 swift run -c release --package-path Packages/PolishCore polish-cli golden --tone casual --tone-prompt prompts/v2.txt

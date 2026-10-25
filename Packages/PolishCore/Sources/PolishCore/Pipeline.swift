@@ -28,6 +28,8 @@ public struct PolishResult: Sendable {
         public var attempts: [Attempt]
         /// True when this chunk had to be split again after overflowing the context.
         public var rechunked: Bool
+        /// True when a restyle tone merged this chunk's lines and it was rewritten line by line.
+        public var splitByLine = false
     }
 
     public struct Attempt: Sendable {
@@ -107,7 +109,7 @@ public final class Pipeline: Sendable {
         for chunk in chunks {
             try Task.checkCancellation()
             let rewritten = try await rewrite(chunk.text, protected: protected, tone: tone, withChanges: withChanges,
-                                              budget: budget, allowRechunk: true)
+                                              budget: budget, allowRechunk: true, allowLineSplit: true)
             output += rewritten.text + chunk.separator
             changes += rewritten.changes
             fallbacks += rewritten.fallbacks
@@ -150,7 +152,8 @@ public final class Pipeline: Sendable {
         tone: Tone,
         withChanges: Bool,
         budget: Int,
-        allowRechunk: Bool
+        allowRechunk: Bool,
+        allowLineSplit: Bool
     ) async throws -> Rewritten {
         let numbers = Array(Set(Placeholder.numbers(in: source))).sorted()
         let request = GenerationRequest(
@@ -195,6 +198,11 @@ public final class Pipeline: Sendable {
                                  trace: .init(attempts: attempts, rechunked: false))
             }
             Log.engine.info("Validation failed: \(failures.map(\.description).joined(separator: ", "), privacy: .public)")
+            // Restyle tones merge lines they see together, and a retry rarely fixes that (eval/RESULTS.md).
+            if tone != .keep, allowLineSplit, failures.contains(.lines) {
+                return try await rewriteByLine(source, protected: protected, tone: tone, withChanges: withChanges,
+                                               budget: budget, firstAttempt: attempts)
+            }
         }
         return Rewritten(text: source, changes: [], fallbacks: [attempts.last?.failures ?? []],
                          trace: .init(attempts: attempts, rechunked: false))
@@ -214,13 +222,49 @@ public final class Pipeline: Sendable {
         for piece in pieces {
             try Task.checkCancellation()
             let rewritten = try await rewrite(piece.text, protected: protected, tone: tone, withChanges: withChanges,
-                                              budget: budget / 2, allowRechunk: false)
+                                              budget: budget / 2, allowRechunk: false, allowLineSplit: true)
             result.text += rewritten.text + piece.separator
             result.changes += rewritten.changes
             result.fallbacks += rewritten.fallbacks
             result.trace.attempts += rewritten.trace.attempts
         }
         return result
+    }
+
+    /// A restyle tone merged lines: rewrite each line on its own. A line without words (a code block, an
+    /// emoji or a link alone) stays as it is. A line of three words or fewer gets Keep my tone, because a
+    /// restyle of a short line alone (`todo for release:`) tends to invent text or echo the format prompt.
+    private func rewriteByLine(
+        _ source: String,
+        protected: ProtectedText,
+        tone: Tone,
+        withChanges: Bool,
+        budget: Int,
+        firstAttempt: [PolishResult.Attempt]
+    ) async throws -> Rewritten {
+        var result = Rewritten(text: "", changes: [], fallbacks: [],
+                               trace: .init(attempts: firstAttempt, rechunked: false, splitByLine: true))
+        for line in Chunker.lines(Chunk(text: source)) {
+            try Task.checkCancellation()
+            guard Self.hasWords(line.text) else {
+                result.text += line.text + line.separator
+                continue
+            }
+            let words = Placeholder.pattern.replacing(in: line.text, with: "").split(whereSeparator: \.isWhitespace).count
+            let rewritten = try await rewrite(line.text, protected: protected, tone: words <= 3 ? .keep : tone,
+                                              withChanges: withChanges, budget: budget, allowRechunk: false,
+                                              allowLineSplit: false)
+            result.text += rewritten.text + line.separator
+            result.changes += rewritten.changes
+            result.fallbacks += rewritten.fallbacks
+            result.trace.attempts += rewritten.trace.attempts
+        }
+        return result
+    }
+
+    /// Whether a piece has any words outside its placeholders.
+    static func hasWords(_ text: String) -> Bool {
+        Placeholder.pattern.replacing(in: text, with: "").contains(where: \.isLetter)
     }
 
     /// Splits only when the text could exceed the budget; short drafts skip the token count.
